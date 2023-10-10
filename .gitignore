@@ -166,3 +166,4 @@ cython_debug/
 
 dumps/
 config.yaml
+*.csv
