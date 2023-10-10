@@ -1,5 +1,6 @@
 from typing import List, Any, Dict, Tuple, Optional
 from neo4j import GraphDatabase
+
 from itertools import cycle
 
 import csv
