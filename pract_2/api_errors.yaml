@@ -1,0 +1,62 @@
+1:
+    msg: Unknown error
+    action: retry
+    MatchedHTTPError: 500
+2:
+    msg: App is turned off
+    action: retry
+    MatchedHTTPError: 503
+3:
+    msg: Unknown method
+    action: break
+    MatchedHTTPError: 405
+4:
+    msg: Incorrect sign
+    action: break
+    MatchedHTTPError: 406
+5:
+    msg: Auth failed
+    action: break
+    MatchedHTTPError: 401
+    
+6:
+    msg: Too many requests
+    action: retry
+    MatchedHTTPError: 429
+7:
+    msg: Permission denied
+    action: break
+    MatchedHTTPError: 403
+
+8:
+    msg: Invalid query
+    action: break
+    MatchedHTTPError: 404
+9:  
+    msg: Too many same type actions
+    action: retry
+    MatchedHTTPError: 429
+
+10:
+    msg: Internal server error
+    action: retry
+    MatchedHTTPError: 500
+
+15:
+    msg: Access denied
+    action: break
+    MatchedHTTPError: 403
+
+18:
+    msg: User deleted or banned
+    action: skip
+    MatchedHTTPError: 404
+29:
+    msg: Rate limit reached
+    action: break
+    MatchedHTTPError: 429
+
+30:
+    msg: Private profile
+    action: skip
+    MatchedHTTPError: 403
