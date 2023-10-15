@@ -53,8 +53,8 @@
     MatchedHTTPError: 404
 29:
     msg: Rate limit reached
-    action: break
-    MatchedHTTPError: 429
+    action: skip
+    MatchedHTTPError: 430
 
 30:
     msg: Private profile
