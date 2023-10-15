@@ -2,6 +2,7 @@
 from neo4j import GraphDatabase
 from typing import List, Any, Dict, Tuple, Optional, Set
 
+
 class Neo4jAgent:
     def __init__(self,
                  host:str,
@@ -18,12 +19,13 @@ class Neo4jAgent:
       self.driver.close()
 
     def _load_person_from_csv(self, tx, filepath):
-      query = f"""load csv from $filepath as line
-      merge (p1:Person {id:line[0]})
-      merge (p2:Person {id:line[1]})
-      merge (p1)-[:IS_FRIENDS_WITH]->(p2);"""
-      params = {"filepath":filepath}
-      tx.run(query, parameters = params)
+        src = f"file:///{filepath}"
+        print(filepath)
+        query  = "load csv from $src as line\n"
+        query += "merge (p1:Person {id:line[0]})\n"
+        query += "merge (p2:Person {id:line[1]})\n"
+        query += "merge (p1)-[:IS_FRIENDS_WITH]->(p2);"
+        tx.run(query, src = src)
 
 
     def _add_person_friends(self, tx, root_id:str, leaf_ids:List[str]) -> None:
@@ -43,7 +45,6 @@ class Neo4jAgent:
     def add_person_friends(self, root_id, leaf_ids:List[str]) -> None:
         with self.driver.session(database = self.database) as session:
             session.execute_write(self._add_person_friends,root_id, leaf_ids)
-
 
     def load_person_from_csv(self, filepath):
         with self.driver.session(database = self.database) as session:

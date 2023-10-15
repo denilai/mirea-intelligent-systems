@@ -78,8 +78,6 @@ class VkApiAgent:
             logger.debug(r.json())
             raise SystemExit("Unexpected keys in response. `response` are Expected") from e
         
-    
-
 
     def get_friends(self, uid:int, **kwargs) -> list[int]:
         backoff_factor = 0.09
