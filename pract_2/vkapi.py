@@ -66,11 +66,13 @@ class VkApiAgent:
         method = "users.get"
         logger.debug(f"Process `{screen_names}`")
         r = self._retry_wrapper(method, params, backoff_factor)
+        if r is None:
+            return []
         #print(r.json())
         #exit(1)
         try:
             friends = r.json()["response"]
-            logger.info("GET users info")
+            logger.info("Get users info")
             return friends
         except KeyError as e:
             logger.debug(r.json())
