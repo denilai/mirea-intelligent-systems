@@ -1,12 +1,24 @@
 from typing import Dict, Any, Callable, Tuple, Mapping
+import sys
 import yaml
 import logging
 import os
 import subprocess as subproc
 import re
 
+def create_logger(app_name):
+    """Create a logging interface"""
+    logging_level = os.getenv('LOG_LVL', logging.INFO)
+    logging.basicConfig(
+        level=logging_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(app_name)
+    return logger
+
+logger = create_logger("Utils")
 
 _find_unsafe = re.compile(r'[^\w@%+=:,./-]', re.ASCII).search
+
 
 def quote(s):
     """Return a shell-escaped version of the string *s*."""
@@ -57,20 +69,11 @@ def batched(iterable, n):
 def parse_config(filepath:str) -> Dict[str, Any]:
     with open(filepath,"r") as f:
         config = yaml.safe_load(f)
+    logger.info(f"Config {filepath} successfully parsed")
     return config
 
 
-def create_logger(app_name):
-    """Create a logging interface"""
-    logging_level = os.getenv('LOG_LVL', logging.INFO)
-    logging.basicConfig(
-        level=logging_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger(app_name)
-    return logger
-
-
-def exec_cmd(cmd: list[str], logger) -> str:
+def exec_cmd(cmd: list[str]) -> str:
     cmd_str = quote(" ".join(list(map(lambda x: x.strip(), cmd))))
     logger.debug("[CMD] " + cmd_str)
     try:
@@ -80,5 +83,4 @@ def exec_cmd(cmd: list[str], logger) -> str:
         error.output = error.output.decode('utf-8').strip().replace('\n', '\n   | ')
         output=f"   | Command {cmd_str} failed with exit code {error.returncode}\n   | Output: {error.output}"
         raise subproc.CalledProcessError(error.returncode, error.cmd, output)
-
 

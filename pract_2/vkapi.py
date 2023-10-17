@@ -47,8 +47,6 @@ class VkApiAgent:
                 return r
             r.status_code = self.api_errors[err_code]['MatchedHTTPError']
             r.reason = err_msg
-            if self.api_errors[err_code]['action']=='skip':
-                raise IgnoreThisApiError
         except AttributeError as e:
             pass
         finally:
@@ -64,12 +62,13 @@ class VkApiAgent:
             ,"v": "5.154"
         }
         method = "execute"
+        logger.info(f"Run {method}`")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             return []
         return r.json()["response"]
 
-    def get_users(self, screen_names:list[str],  **kwargs) -> list[int]:
+    def get_users_ids(self, screen_names:list[str],  **kwargs) -> list[int]:
         backoff_factor = 0.09
         params = {
              "access_token": self.access_token
@@ -78,16 +77,14 @@ class VkApiAgent:
             ,**kwargs
         }
         method = "users.get"
-        logger.debug(f"Process `{screen_names}`")
+        logger.info(f"Run {method} for `{screen_names}`")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             return []
-        #print(r.json())
-        #exit(1)
         try:
             friends = r.json()["response"]
-            logger.info("Get users info")
-            return friends
+            friends_uids = [user["id"] for user in friends]
+            return friends_uids
         except KeyError as e:
             logger.debug(r.json())
             raise SystemExit("Unexpected keys in response. `response` are Expected") from e
@@ -102,7 +99,7 @@ class VkApiAgent:
             ,**kwargs
         }
         method = "friends.get"
-        logger.debug(f"Process `{uid}`")
+        logger.info(f"Run {method} for `{uid}`")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             return []
