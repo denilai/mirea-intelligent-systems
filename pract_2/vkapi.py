@@ -55,6 +55,20 @@ class VkApiAgent:
             return r
         
 
+    def execute(self, code:str):
+        backoff_factor = 0.09
+        params = {
+             "access_token": self.access_token
+            ,"code" : code
+            ,"func_v": 1
+            ,"v": "5.154"
+        }
+        method = "execute"
+        r = self._retry_wrapper(method, params, backoff_factor)
+        if r is None:
+            return []
+        return r.json()["response"]
+
     def get_users(self, screen_names:list[str],  **kwargs) -> list[int]:
         backoff_factor = 0.09
         params = {

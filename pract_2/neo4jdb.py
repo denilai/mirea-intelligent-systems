@@ -1,6 +1,9 @@
 
 from neo4j import GraphDatabase
 from typing import List, Any, Dict, Tuple, Optional, Set
+from utils import create_logger
+
+logger = create_logger("Neo4j")
 
 
 class Neo4jAgent:
@@ -18,6 +21,9 @@ class Neo4jAgent:
     def close(self):
       self.driver.close()
 
+
+        
+
     def _load_person_from_csv(self, tx, filepath):
         src = f"file:///{filepath}"
         print(filepath)
@@ -25,6 +31,7 @@ class Neo4jAgent:
         query += "merge (p1:Person {id:line[0]})\n"
         query += "merge (p2:Person {id:line[1]})\n"
         query += "merge (p1)-[:IS_FRIENDS_WITH]->(p2);"
+        logger.info(f"Load {filepath}")
         tx.run(query, src = src)
 
 
@@ -41,6 +48,15 @@ class Neo4jAgent:
 
     def _add_person(self, tx, person_id):
         result = tx.run("CREATE (p: Person {id: $person_id})", person_id = person_id)
+
+    def _detach_delete_persons(self, tx):
+        logger.info("Detach delete all Person nodes")
+        result = tx.run("MATCH (n:Person) DETACH DELETE n;")
+
+    def detach_delete_persons(self):
+        with self.driver.session(database = self.database) as session:
+            session.execute_write(self._detach_delete_persons)
+
 
     def add_person_friends(self, root_id, leaf_ids:List[str]) -> None:
         with self.driver.session(database = self.database) as session:
