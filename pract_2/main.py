@@ -1,8 +1,8 @@
-from typing import Any, Optional, Callable, Iterable
-from multiprocessing import Pool, TimeoutError
+from typing import Callable, Iterable
+from multiprocessing import Pool
 from itertools import cycle, chain
-from functools import partial, reduce
-from utils import parse_config, create_logger, exec_cmd, batched
+from functools import partial
+from utils import parse_config, create_logger, exec_cmd, batched, concat, copy_file_to_remote_host, truncate_file
 
 import csv
 import os
@@ -14,10 +14,7 @@ from vkapi import VkApiAgent
 from neo4jdb import Neo4jAgent
 
 
-
 logger = create_logger("Main")
-
-
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -26,20 +23,13 @@ def get_friends_pairs(root:int, leafs:list[int]) -> list[tuple[int,int]]:
     logger.info(f"Create {len(leafs)} frendships pairs for uid {root}")
     return list(zip(cycle([root]),leafs))
 
+
 def write_pairs_into_csv(filename, pairs):
     logger.info(f"Write {len(pairs)} friednships pairs into file {filename}")
     with open(filename, "a") as f:
         spamwriter = csv.writer(f,delimiter = ",")
         spamwriter.writerows(pairs)
 
-def process_user(api_instance, uid:int) -> list[tuple[int, int]]:
-    """Find user friends and write pairs `(user_id,friend_id)` to csv file"""
-    friends:list[int] = api_instance.get_friends(uid)
-    #logger.info(f"Count friends of user {uid} = {len(friends)}")
-    f_pairs:list[tuple[int, int]] = get_friends_pairs(uid, friends)
-    return f_pairs
-
-        #res = pool.map(api_instance.get_friends,xs
 
 def parallel_runner(f_map:Callable, xs:Iterable, f_out:Callable, processes:int = 5):
     logger.info(f"Running func {f_map} in {processes} processes. Out func: {f_out.__name__} with list {xs}")
@@ -47,26 +37,9 @@ def parallel_runner(f_map:Callable, xs:Iterable, f_out:Callable, processes:int =
         res = pool.map(f_map,xs)
     return f_out(res)
 
-def get_friends_pair2s(config, api_instance):
-    classmates_screen_names = config["input"]["classmates_raw"]
 
-    classmates:set[int] = set([user["id"] for user in api_instance.get_users(classmates_screen_names)])
-
-    unique_uid = classmates.union(parallel_runner(api_instance.get_friends, classmates, lambda x: set(chain(*x)), processes = 10))
-    logger.info(f"Count ot unique UID = {len(unique_uid)}")
-    friends_pairs = parallel_runner(partial(process_user, api_instance),unique_uid, lambda x: list(chain(*x)), processes = 10)
-
-    #uid_to_process = reduce(lambda x,y: x.union(api_instance.get_friends(y)), uid_to_process, uid_to_process)
-
-    #with Pool(processes=5) as pool:
-    #    res = pool.map(partial(process_user,api_instance), uid_to_process)
-    #friends_pairs = list(chain(*res))
-    logging.info(f"All UIDs have been processed. Count of friends relationships = {len(friends_pairs)}")
-    return friends_pairs
-
-
-def get_list_of_friendship_pairs(api, uids:Iterable[int]) -> list[list[tuple[int, int]]]:
-    logger.info(f"Get list of friendship pairs for {uids}")
+def get_friendships_pairs_for_each_uid(api, uids:Iterable[int]) -> list[list[tuple[int,int]]]:
+    logger.info(f"Search friendship pairs for {uids}")
     code = f"""var b = {list(uids)};
     var count = b.length;
     var i = 0;
@@ -88,7 +61,8 @@ def get_list_of_friendship_pairs(api, uids:Iterable[int]) -> list[list[tuple[int
     return list_of_friendship_pairs
 
 
-def get_list_of_friends(api,uids: Iterable[int]) -> list[list[int]]:
+def get_friends_for_each_uid(api,uids: Iterable[int]) -> list[list[int]]:
+    logger.info(f"Search friends for {uids}")
     code = f"""var b = {list(uids)};
     var count = b.length;
     var i = 0;
@@ -107,44 +81,57 @@ def get_list_of_friends(api,uids: Iterable[int]) -> list[list[int]]:
     return api.execute(code)
 
 
-def concat(iters:Iterable):
-    return list(reduce(lambda x,y: x+y, iters, []))
+def four_lvl(api, uids:Iterable[int]) -> list[list[tuple[int,int]]]:
+    code = f"""var b = {list(uids)};
+    var count = b.length;
+    var i = 0;
+    var res = [];
+    while (i<count) {{
+        var friends = API.friends.get({{"user_id":b[i]}});
+        if (friends.items == null) {{
+            res.push([b[i],[]]);
+        }}
+        else {{
+            res.push([b[i],friends.items]);
+        }}
+        i=i+1;
+    }};
+
+    return res;"""
+    root_leafs_list = api.execute(code)
+    list_of_friendship_pairs = list(map(lambda x: get_friends_pairs(x[0], x[1]), root_leafs_list))
+    return list_of_friendship_pairs
+
 
 def process_uids_execute_version(config, api) -> list[list[tuple[int, int]]]:
     csv_file = config["result"]["csv_file"] 
     classmates_screen_names:list[str] = config["input"]["classmates_raw"]
 
-    logger.info(f"Input user names: {classmates_screen_names}")
+    logger.info(f"Classmates: {classmates_screen_names} ({len(classmates_screen_names)} elements)")
 
     classmates_uids:set[int] = set(api_instance.get_users_ids(classmates_screen_names))
-    logger.info(f"Input user ids: {classmates_uids}")
+    logger.info(f"Classmates IDs: {classmates_uids} ({len(classmates_uids)} elements)")
 
     # flattening nested lists
-    friends_of_classmates = set(chain(*get_list_of_friends(api, classmates_uids)))
-    unique_uids:set[int] = classmates_uids.union(friends_of_classmates)
+    friends_of_classmates = set(chain(*get_friends_for_each_uid(api, classmates_uids)))
+
+    friends_of_friends_of_classmates = set(chain(*get_friends_for_each_uid(api, friends_of_classmates)))
+    unique_uids:set[int] = classmates_uids.union(friends_of_classmates).union(friends_of_friends_of_classmates)
 
     logger.info(f"Count of unique uids to be processed: {len(unique_uids)}")
 
     # split list to chunks (20 elems) to avoid api overloading
     splitted_unique_uids:list[tuple] = list(batched(unique_uids, 20))
 
-    # running func `get_list_of_friendships_pairs` in parallel and processing its result
+    # running func `get_friendships_pairs_for_each_uid` in parallel and processing its result
     list_of_friendship_pairs:list[list[tuple[int, int]]] = parallel_runner(
-         partial(get_list_of_friendship_pairs, api)
+         partial(get_friendships_pairs_for_each_uid, api)
         ,splitted_unique_uids
         ,concat
         ,10
     )
     return list_of_friendship_pairs
-    
-def copy_file_to_remote_host(src:str, dest:str, host:str, user:str) -> None:
-    cmd  = f"scp {src} {user}@{host}:{dest}"
-    exec_cmd(cmd.split(" "))
-    logger.info(f"Сopy {src} to {host}:{dest}")
 
-def truncate_file(filename:str) -> None:
-    open(filename, "w")
-    logger.info(f"Truncate file {filename}")
 
 if __name__ == "__main__":
     config = parse_config("./config.yaml")

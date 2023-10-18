@@ -1,4 +1,5 @@
-from typing import Dict, Any, Callable, Tuple, Mapping
+from typing import Dict, Any, Callable, Tuple, Mapping, Iterable
+from functools import reduce
 import sys
 import yaml
 import logging
@@ -16,6 +17,21 @@ def create_logger(app_name):
     return logger
 
 logger = create_logger("Utils")
+
+
+def concat(iters:Iterable):
+    return list(reduce(lambda x,y: x+y, iters, []))
+
+def copy_file_to_remote_host(src:str, dest:str, host:str, user:str) -> None:
+    cmd  = f"scp {src} {user}@{host}:{dest}"
+    exec_cmd(cmd.split(" "))
+    logger.info(f"Сopy {src} to {host}:{dest}")
+
+
+def truncate_file(filename:str) -> None:
+    open(filename, "w")
+    logger.info(f"Truncate file {filename}")
+
 
 _find_unsafe = re.compile(r'[^\w@%+=:,./-]', re.ASCII).search
 
