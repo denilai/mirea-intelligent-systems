@@ -39,16 +39,22 @@ class VkApiAgent:
 
 
     def handle_api_errors(self, r, *args, **kwargs):
+        #TODO:: add support of execute_errors (execute method)
         try:
-            err_code = r.json()["error"]["error_code"]
-            err_msg = r.json()["error"]["error_msg"]
-            if err_code not in self.api_errors:
-                assert False, "Unexpected err_code"
-                return r
-            r.status_code = self.api_errors[err_code]['MatchedHTTPError']
-            r.reason = err_msg
+            errors = r.json()["execute_errors"]
+            err_pairs = [(err["error_code"], err["error_msg"]) for err in errors]
+
         except AttributeError as e:
-            pass
+            try:
+                err_code = r.json()["error"]["error_code"]
+                err_msg = r.json()["error"]["error_msg"]
+                if err_code not in self.api_errors:
+                    assert False, "Unexpected err_code"
+                    return r
+                r.status_code = self.api_errors[err_code]['MatchedHTTPError']
+                r.reason = err_msg
+            except AttributeError as e:
+                pass
         finally:
             return r
         
@@ -136,4 +142,5 @@ class VkApiAgent:
                         time.sleep(wait)
                         continue
                     raise SystemExit(err)
+            print(r.json())
             return r

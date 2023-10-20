@@ -1,6 +1,6 @@
 from typing import Callable, Iterable
 from multiprocessing import Pool
-from itertools import cycle, chain
+from itertools import cycle, chain, starmap
 from functools import partial
 from utils import parse_config, create_logger, exec_cmd, batched, concat, copy_file_to_remote_host, truncate_file
 
@@ -12,6 +12,10 @@ import logging
 
 from vkapi import VkApiAgent
 from neo4jdb import Neo4jAgent
+
+
+# count of IDs for processing in `execute` method of VkAPI
+API_LIST_THRESHOLD = 20
 
 
 logger = create_logger("Main")
@@ -30,12 +34,6 @@ def write_pairs_into_csv(filename, pairs):
         spamwriter = csv.writer(f,delimiter = ",")
         spamwriter.writerows(pairs)
 
-
-def parallel_runner(f_map:Callable, xs:Iterable, f_out:Callable, processes:int = 5):
-    logger.info(f"Running func {f_map} in {processes} processes. Out func: {f_out.__name__} with list {xs}")
-    with Pool(processes=1) as pool:
-        res = pool.map(f_map,xs)
-    return f_out(res)
 
 
 def get_friendships_pairs_for_each_uid(api, uids:Iterable[int]) -> list[list[tuple[int,int]]]:
@@ -113,23 +111,34 @@ def process_uids_execute_version(config, api) -> list[list[tuple[int, int]]]:
     logger.info(f"Classmates IDs: {classmates_uids} ({len(classmates_uids)} elements)")
 
     # flattening nested lists
-    friends_of_classmates = set(chain(*get_friends_for_each_uid(api, classmates_uids)))
+    logger.info("Find friends of first level (friends of classmates)")
+    fr_1_lvl:set[int] = set(chain(*get_friends_for_each_uid(api, classmates_uids)))
 
-    friends_of_friends_of_classmates = set(chain(*get_friends_for_each_uid(api, friends_of_classmates)))
-    unique_uids:set[int] = classmates_uids.union(friends_of_classmates).union(friends_of_friends_of_classmates)
+    # split list to chunks to avoid api overloading
+    fr_1_lvl_s:list[set[int]] = list(batched(fr_1_lvl, API_LIST_THRESHOLD))
+    logger.info(f"Split list of IDs about {len(fr_1_lvl)} to {len(fr_1_lvl_s)} chuncks about {API_LIST_THRESHOLD} elements")
 
-    logger.info(f"Count of unique uids to be processed: {len(unique_uids)}")
+    # flattening nested lists
+    logger.info("Find friends of second level (friends of friends of classmates)")
+    fr_2_lvl:set[int] = set(chain(*list(map(lambda x: set(chain(*get_friends_for_each_uid(api, x))), fr_1_lvl_s))))
 
-    # split list to chunks (20 elems) to avoid api overloading
-    splitted_unique_uids:list[tuple] = list(batched(unique_uids, 20))
+    unique_uids:set[int] = classmates_uids.union(fr_1_lvl).union(fr_2_lvl)
+    logger.info(f"Count of unique IDs == {len(unique_uids)}")
 
-    # running func `get_friendships_pairs_for_each_uid` in parallel and processing its result
-    list_of_friendship_pairs:list[list[tuple[int, int]]] = parallel_runner(
-         partial(get_friendships_pairs_for_each_uid, api)
-        ,splitted_unique_uids
-        ,concat
-        ,10
+    # split list to chunks to avoid api overloading
+    splitted_unique_uids:list[tuple] = list(batched(unique_uids, API_LIST_THRESHOLD))
+    logger.info(f"Split list of IDs about {len(unique_uids)} to {len(splitted_unique_uids)} chuncks about {API_LIST_THRESHOLD} elements")
+
+    list_of_friendship_pairs:list[list[tuple[int, int]]] = concat(
+          starmap(
+              get_friendships_pairs_for_each_uid
+            , list(
+                 zip(cycle([api])
+               , splitted_unique_uids)
+            )
+        )
     )
+    exit(1)
     return list_of_friendship_pairs
 
 
