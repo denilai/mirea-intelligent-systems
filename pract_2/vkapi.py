@@ -1,6 +1,4 @@
 from typing import List, Any, Dict, Tuple, Optional, Set
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
 import requests
 import os
 import json
@@ -21,21 +19,12 @@ class VkApiAgent:
         dir_path = os.path.dirname(os.path.realpath(__file__))
         self.api_errors = parse_config(os.path.join(dir_path, "api_errors.yaml"))
 
-        self.retried_errors:Dict[int, int] = {6:429}
-        self.skiped_errors:Dict[int, int] = {30:400}
         self.api_endpoint = endpoint
         self.access_token = access_token
 
-        retries = Retry(
-            total=3,
-            backoff_factor=0.1,
-            status_forcelist=[502, 503, 504, 429, 404, 430],
-            allowed_methods={'GET'},
-        )
         self.session = requests.Session()
         self.session.hooks["response"].append(self._handle_execute_errors)
         self.session.hooks["response"].append(self._handle_api_errors)
-        self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
     def _handle_execute_errors(self, r, *args, **kwargs):
         try:
