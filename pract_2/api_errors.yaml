@@ -53,7 +53,7 @@
     MatchedHTTPError: 404
 29:
     msg: Rate limit reached
-    action: skip
+    action: break
     MatchedHTTPError: 430
 
 30:

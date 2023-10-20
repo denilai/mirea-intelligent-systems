@@ -14,7 +14,6 @@ from utils import create_logger, parse_config
 logger = create_logger("VkAPI")
 
 
-
 class VkApiAgent:
 
     
@@ -30,31 +29,57 @@ class VkApiAgent:
         retries = Retry(
             total=3,
             backoff_factor=0.1,
-            status_forcelist=[502, 503, 504, 429, 404],
+            status_forcelist=[502, 503, 504, 429, 404, 430],
             allowed_methods={'GET'},
         )
         self.session = requests.Session()
-        self.session.hooks["response"].append(self.handle_api_errors)
+        self.session.hooks["response"].append(self._handle_execute_errors)
+        self.session.hooks["response"].append(self._handle_api_errors)
         self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
-
-    def handle_api_errors(self, r, *args, **kwargs):
-        #TODO:: add support of execute_errors (execute method)
+    def _handle_execute_errors(self, r, *args, **kwargs):
         try:
             errors = r.json()["execute_errors"]
             err_pairs = [(err["error_code"], err["error_msg"]) for err in errors]
-
-        except AttributeError as e:
-            try:
-                err_code = r.json()["error"]["error_code"]
-                err_msg = r.json()["error"]["error_msg"]
-                if err_code not in self.api_errors:
-                    assert False, "Unexpected err_code"
+            actions = [self.api_errors[err_code]["action"] for err_code, _ in err_pairs]
+            http_errors = [self.api_errors[err_code]["MatchedHTTPError"] for err_code, _ in err_pairs]
+            # breack, retry, skip
+            for err_code, err_msg in err_pairs:
+                if self.api_errors[err_code]["action"] == "break":
+                    r.status_code = self.api_errors[err_code]["MatchedHTTPError"]
+                    r.reason = err_msg
+                    logger.debug(f"Code has been changed to {self.api_errors[err_code]['MatchedHTTPError']}")
                     return r
-                r.status_code = self.api_errors[err_code]['MatchedHTTPError']
-                r.reason = err_msg
-            except AttributeError as e:
-                pass
+            for error_code, error_msg in err_pairs:
+                if self.api_errors[err_code]["action"] == "retry":
+                    r.status_code = self.api_errors[err_code]["MatchedHTTPError"]
+                    r.reason = err_msg
+                    logger.debug(f"Code has been changed to {self.api_errors[err_code]['MatchedHTTPError']}")
+                    return r
+            for error_code, error_msg in err_pairs:
+                if self.api_errors[err_code]["action"] == "skip":
+                    r.status_code = self.api_errors[err_code]["MatchedHTTPError"]
+                    r.reason = err_msg
+                    logger.debug(f"Code has been changed to {self.api_errors[err_code]['MatchedHTTPError']}")
+                    return r
+            assert False, "Unexpected error"
+        except KeyError as e:
+            return r
+
+        
+
+    def _handle_api_errors(self, r, *args, **kwargs):
+        try:
+            err_code = r.json()["error"]["error_code"]
+            err_msg = r.json()["error"]["error_msg"]
+            if err_code not in self.api_errors:
+                assert False, "Unexpected err_code"
+                return r
+            r.status_code = self.api_errors[err_code]['MatchedHTTPError']
+            logger.debug(f"Code has been changed to {self.api_errors[err_code]['MatchedHTTPError']}")
+            r.reason = err_msg
+        except (AttributeError, KeyError) as e:
+            pass
         finally:
             return r
         
@@ -68,7 +93,8 @@ class VkApiAgent:
             ,"v": "5.154"
         }
         method = "execute"
-        logger.info(f"Run {method}`")
+        logger.info(f"Run `{method}`")
+        logger.debug("Query: {code}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             return []
@@ -83,7 +109,7 @@ class VkApiAgent:
             ,**kwargs
         }
         method = "users.get"
-        logger.info(f"Run {method} for `{screen_names}`")
+        logger.info(f"Run `{method}` for {screen_names}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             return []
@@ -105,7 +131,7 @@ class VkApiAgent:
             ,**kwargs
         }
         method = "friends.get"
-        logger.info(f"Run {method} for `{uid}`")
+        logger.info(f"Run `{method}` for {uid}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             return []
@@ -129,18 +155,21 @@ class VkApiAgent:
                     r.raise_for_status()
                     success = True
                 except requests.exceptions.HTTPError as err:
-                    logger.debug(f"Response api code: {err.response.status_code}")
+                    logger.info(f"Response api code: {err.response.status_code}")
                     retries += 1
                     if err.response.status_code in [self.api_errors[er]["MatchedHTTPError"] for er in self.api_errors if self.api_errors[er]["action"] == "skip"]:
-                        logger.debug(f"Skip -- `{err.response.reason}`")
+                        logger.info(f"Skip -- `{err.response.reason}`")
                         return None
+                    if err.response.status_code in [self.api_errors[er]["MatchedHTTPError"] for er in self.api_errors if self.api_errors[er]["action"] == "break"]:
+                        logger.info(f"Break -- `{err.response.reason}`")
+                        raise SystemExit
                     if err.response.status_code in [self.api_errors[er]["MatchedHTTPError"] for er in self.api_errors if self.api_errors[er]["action"] == "retry"]:
-                        logger.debug(f"Retry -- `{err.response.reason}`")
+                        logger.info(f"Retry -- `{err.response.reason}`")
                         wait = backoff_factor * (2 ** (retries))
                         logger.debug(f"Wait {wait} seconds")
                         sys.stdout.flush()
                         time.sleep(wait)
                         continue
                     raise SystemExit(err)
-            print(r.json())
+            logger.debug(r.json())
             return r
