@@ -9,11 +9,13 @@ import re
 
 def create_logger(app_name):
     """Create a logging interface"""
-    logging_level = os.getenv('LOG_LVL', logging.INFO)
+    if len(app_name) > 6:
+        assert False, "Logger name too long"
+    logging_level = os.getenv("LOG_LVL", logging.INFO)
     logging.basicConfig(
         level=logging_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger(app_name)
+    logger = logging.getLogger(f"{app_name:^6}")
     return logger
 
 logger = create_logger("Utils")
