@@ -12,9 +12,9 @@ from utils import create_logger, parse_config
 logger = create_logger("VkAPI")
 
 
+"""Класс, инкапсулирующий работу с Vk APi (https://dev.vk.com/ru/reference)"""
 class VkApiAgent:
 
-    
     def __init__(self, endpoint:str, access_token:str):
         dir_path = os.path.dirname(os.path.realpath(__file__))
         self.api_errors = parse_config(os.path.join(dir_path, "api_errors.yaml"))
@@ -26,13 +26,11 @@ class VkApiAgent:
         self.session.hooks["response"].append(self._handle_execute_errors)
         self.session.hooks["response"].append(self._handle_api_errors)
 
+    """ Хук для обработки множественных ошибок, возникающих в ходе выполнения метода `execute`"""
     def _handle_execute_errors(self, r, *args, **kwargs):
         try:
             errors = r.json()["execute_errors"]
             err_pairs = [(err["error_code"], err["error_msg"]) for err in errors]
-            actions = [self.api_errors[err_code]["action"] for err_code, _ in err_pairs]
-            http_errors = [self.api_errors[err_code]["MatchedHTTPError"] for err_code, _ in err_pairs]
-            # breack, retry, skip
             for err_code, err_msg in err_pairs:
                 if self.api_errors[err_code]["action"] == "break":
                     r.status_code = self.api_errors[err_code]["MatchedHTTPError"]
@@ -57,13 +55,13 @@ class VkApiAgent:
 
         
 
+    """ Хук для обработки одиночных ошибок, возникающих при выполнении обычных методов """
     def _handle_api_errors(self, r, *args, **kwargs):
         try:
             err_code = r.json()["error"]["error_code"]
             err_msg = r.json()["error"]["error_msg"]
             if err_code not in self.api_errors:
-                assert False, "Unexpected err_code"
-                return r
+                assert False, "Unexpected error code from VKApi"
             r.status_code = self.api_errors[err_code]['MatchedHTTPError']
             logger.debug(f"Code has been changed to {self.api_errors[err_code]['MatchedHTTPError']}")
             r.reason = err_msg
@@ -71,8 +69,8 @@ class VkApiAgent:
             pass
         finally:
             return r
-        
 
+    """ Вызов метода `execute`"""
     def execute(self, code:str):
         backoff_factor = 0.09
         params = {
@@ -89,7 +87,17 @@ class VkApiAgent:
             return []
         return r.json()["response"]
 
-    def get_users_ids(self, screen_names:list[str],  **kwargs) -> list[int]:
+    def get_users_ids(self, *args,  **kwargs) -> list[int]:
+        try:
+            friends = self.users_get(*args, **kwargs)
+            return [user["id"] for user in friends]
+        except KeyError as e:
+            logger.debug(r.json())
+            logger.exception("Unexpected keys in response. `id` are Expected")
+            raise SystemExit("Unexpected keys in response. `id` are Expected") from e
+
+    """ Вызов метода `users.get`"""
+    def users_get(self, screen_names:list[str], **kwargs) -> dict:
         backoff_factor = 0.09
         params = {
              "access_token": self.access_token
@@ -101,17 +109,18 @@ class VkApiAgent:
         logger.info(f"Run `{method}` for {screen_names}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
-            return []
+            logger.exception("Response object is None")
+            raise SystemExit("Response object is None")
         try:
-            friends = r.json()["response"]
-            friends_uids = [user["id"] for user in friends]
-            return friends_uids
+            return r.json()["response"]
         except KeyError as e:
             logger.debug(r.json())
+            logger.exception("Unexpected keys in response. `response` are Expected")
             raise SystemExit("Unexpected keys in response. `response` are Expected") from e
-        
 
-    def get_friends(self, uid:int, **kwargs) -> list[int]:
+
+    """ Вызов метода `friends.get`"""
+    def friends_get(self, uid:int, **kwargs) -> list[int]:
         backoff_factor = 0.09
         params = {
              "access_token": self.access_token
@@ -125,11 +134,20 @@ class VkApiAgent:
         if r is None:
             return []
         try:
-            friends = r.json()["response"]["items"]
+            return r.json()["response"] 
+        except KeyError as e:
+            logger.debug(r.json())
+            logger.exception("Unexpected key in response. `response` is Expected")
+            raise SystemExit("Unexpected key in response. `response` is Expected") from e
+
+    def get_friends(self, uid:int, **kwargs) -> list[int]:
+        try:
+            friends = self.friends_get(uid, **kwargs)["items"]
             logger.info(f"Count of friends for user `{uid}` = {len(friends)}")
             return friends
         except KeyError as e:
             logger.debug(r.json())
+            logger.exception("Unexpected keys in response. `response.items` are Expected")
             raise SystemExit("Unexpected keys in response. `response.items` are Expected") from e
 
     def _retry_wrapper(self, method, params, backoff_factor=0.1):
