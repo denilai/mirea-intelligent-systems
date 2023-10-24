@@ -92,7 +92,7 @@ class VkApiAgent:
             friends = self.users_get(*args, **kwargs)
             return [user["id"] for user in friends]
         except KeyError as e:
-            logger.debug(r.json())
+            logger.debug(friends)
             logger.exception("Unexpected keys in response. `id` are Expected")
             raise SystemExit("Unexpected keys in response. `id` are Expected") from e
 
@@ -120,7 +120,7 @@ class VkApiAgent:
 
 
     """ Вызов метода `friends.get`"""
-    def friends_get(self, uid:int, **kwargs) -> list[int]:
+    def friends_get(self, uid:int, **kwargs) -> dict[str,Any]:
         backoff_factor = 0.09
         params = {
              "access_token": self.access_token
@@ -132,7 +132,7 @@ class VkApiAgent:
         logger.info(f"Run `{method}` for {uid}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
-            return []
+            return {}
         try:
             return r.json()["response"] 
         except KeyError as e:
@@ -146,7 +146,7 @@ class VkApiAgent:
             logger.info(f"Count of friends for user `{uid}` = {len(friends)}")
             return friends
         except KeyError as e:
-            logger.debug(r.json())
+            logger.debug(friends)
             logger.exception("Unexpected keys in response. `response.items` are Expected")
             raise SystemExit("Unexpected keys in response. `response.items` are Expected") from e
 
