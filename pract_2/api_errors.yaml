@@ -30,7 +30,7 @@
 
 8:
     msg: Invalid query
-    action: break
+    action: skip
     MatchedHTTPError: 404
 9:  
     msg: Too many same type actions
@@ -59,4 +59,4 @@
 30:
     msg: Private profile
     action: skip
-    MatchedHTTPError: 403
+    MatchedHTTPError: 404
