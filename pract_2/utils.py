@@ -7,6 +7,11 @@ import os
 import subprocess as subproc
 import re
 
+
+# Предел количества элементов,
+# которые могут быть обработаны в одном методе `execute`
+API_LIST_THRESHOLD = 20
+
 def create_logger(app_name):
     """Create a logging interface"""
     if len(app_name) > 6:
