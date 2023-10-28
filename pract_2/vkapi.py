@@ -32,24 +32,30 @@ class VkApiAgent:
             errors = r.json()["execute_errors"]
             err_pairs = [(err["error_code"], err["error_msg"]) for err in errors]
             for err_code, err_msg in err_pairs:
-                if self.api_errors[err_code]["action"] == "break":
+                if self.api_errors[err_code]["action"] == "execute_break":
                     r.status_code = self.api_errors[err_code]["MatchedHTTPError"]
                     r.reason = err_msg
+                    logger.debug(f"An error occured while processing `execute`")
                     logger.debug(f"Code has been changed to {self.api_errors[err_code]['MatchedHTTPError']}")
                     return r
             for error_code, error_msg in err_pairs:
-                if self.api_errors[err_code]["action"] == "retry":
+                if self.api_errors[err_code]["action"] == "execute_retry":
                     r.status_code = self.api_errors[err_code]["MatchedHTTPError"]
                     r.reason = err_msg
+                    logger.debug(f"An error occured while processing `execute`")
                     logger.debug(f"Code has been changed to {self.api_errors[err_code]['MatchedHTTPError']}")
                     return r
             for error_code, error_msg in err_pairs:
-                if self.api_errors[err_code]["action"] == "skip":
+                if self.api_errors[err_code]["action"] == "execute_skip":
                     r.status_code = self.api_errors[err_code]["MatchedHTTPError"]
                     r.reason = err_msg
+                    logger.debug(f"An error occured while processing `execute`")
                     logger.debug(f"Code has been changed to {self.api_errors[err_code]['MatchedHTTPError']}")
                     return r
-            assert False, "Unexpected error"
+            for error_code, error_msg in err_pairs:
+                if self.api_errors[err_code]["action"] in ("skip", "breake", "retry"):
+                    return r
+            assert False, f"Unexpected error: {err_code}"
         except KeyError as e:
             return r
 
@@ -81,7 +87,7 @@ class VkApiAgent:
         }
         method = "execute"
         logger.info(f"Run `{method}`")
-        logger.debug("Query: {code}")
+        logger.debug(f"Query: {code}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             return []
