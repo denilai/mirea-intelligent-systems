@@ -132,10 +132,6 @@ def process_uids_execute_version(config) -> set[tuple[int, int]]:
     fr_2_lvl:set[int] = set(chain(*get_friends_for_each_uid(fr_1_lvl)))
     logger.info(f"Find friends of second level (friends of friends of classmates, len = {len(fr_2_lvl)})")
 
-    # друзья друзей друзей одногруппников
-    fr_3_lvl:set[int] = set(chain(*get_friends_for_each_uid(fr_2_lvl)))
-    logger.info(f"Find friends of third level (friends of friends of friends of classmates, len = {len(fr_3_lvl)})")
-
     # Максимальное количество пользователей в графе. Это множетсво будет использовано
     # для отбрасывания лишних связей при обогaщении друзьями 3 уровня
     unique_uids:set[int] = classmates_uids.union(fr_1_lvl).union(fr_2_lvl)
@@ -194,6 +190,6 @@ if __name__ == "__main__":
         , neo4j["password"]
         , neo4j["database"]
     )
-    neo4j_db.detach_delete_persons()
-    neo4j_db.load_person_from_csv(csv_file)
+    #neo4j_db.detach_delete_nodes("Person")
+    neo4j_db.load_from_csv(csv_file, "Person", "IS_FRIENDS_WITH")
     neo4j_db.close()
