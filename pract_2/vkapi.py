@@ -15,8 +15,10 @@ logger = create_logger("VkAPI")
 """Класс, инкапсулирующий работу с Vk APi (https://dev.vk.com/ru/reference)"""
 class VkApiAgent:
 
-    def __init__(self, endpoint:str, access_token:str):
+    def __init__(self, name:str, endpoint:str, access_token:str):
         dir_path = os.path.dirname(os.path.realpath(__file__))
+
+        self.name = name
         self.api_errors = parse_config(os.path.join(dir_path, "api_errors.yaml"))
 
         self.api_endpoint = endpoint
@@ -86,7 +88,7 @@ class VkApiAgent:
             ,"v": "5.154"
         }
         method = "execute"
-        logger.info(f"Run `{method}`")
+        logger.info(f"Run `{method}` from {self.name}")
         logger.debug(f"Query: {code}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
@@ -112,7 +114,7 @@ class VkApiAgent:
             ,**kwargs
         }
         method = "users.get"
-        logger.info(f"Run `{method}` for {screen_names}")
+        logger.info(f"Run `{method}` for {screen_names} from {self.name}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             logger.exception("Response object is None")
@@ -135,7 +137,7 @@ class VkApiAgent:
             ,**kwargs
         }
         method = "friends.get"
-        logger.info(f"Run `{method}` for {uid}")
+        logger.info(f"Run `{method}` for {uid} from {self.name}")
         r = self._retry_wrapper(method, params, backoff_factor)
         if r is None:
             return {}

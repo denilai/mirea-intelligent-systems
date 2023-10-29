@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess as subproc
 import re
+import csv
 
 
 # Предел количества элементов,
@@ -107,3 +108,16 @@ def exec_cmd(cmd: list[str]) -> str:
         output=f"   | Command {cmd_str} failed with exit code {error.returncode}\n   | Output: {error.output}"
         raise subproc.CalledProcessError(error.returncode, error.cmd, output)
 
+def read_from_сsv(filename, delimiter=","):
+    res = []
+    with open(filename) as f:
+        spamreader = csv.reader(f,delimiter = delimiter)
+        for row in spamreader:
+            res.append(tuple(row))
+    return res
+
+def write_pairs_into_csv(filename, pairs):
+    logger.info(f"Write {len(pairs)} friednships pairs into file {filename}")
+    with open(filename, "a") as f:
+        spamwriter = csv.writer(f,delimiter = ",")
+        spamwriter.writerows(pairs)
