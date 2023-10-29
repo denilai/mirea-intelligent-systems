@@ -134,27 +134,27 @@ def process_uids_execute_version(config) -> set[tuple[int, int]]:
 
     # Максимальное количество пользователей в графе. Это множетсво будет использовано
     # для отбрасывания лишних связей при обогaщении друзьями 3 уровня
-    unique_uids:set[int] = classmates_uids.union(fr_1_lvl).union(fr_2_lvl)
+    unique_uids:set[int] = classmates_uids.union(fr_1_lvl)
     logger.info(f"Count of unique IDs = {len(unique_uids)}")
 
     # Пользователи, для которых будут найдены все друзья
-    uids_to_process:set[int] = classmates_uids.union(fr_1_lvl)
+    uids_to_process:set[int] = classmates_uids
     logger.info(f"Count of IDs to process = {len(uids_to_process)}")
     
     # пары, которыми будет обогащен основной набор
-    additional_pairs:list[tuple[int,int]] = concat(get_friendships_pairs_for_each_uid(fr_2_lvl))
-    logger.info("Count of additional pairs (friends of friends of classmates) = {len(additional_pairs)}")
+    additional_pairs:list[tuple[int,int]] = concat(get_friendships_pairs_for_each_uid(fr_1_lvl))
+    logger.info(f"Count of additional pairs (friends of friends of classmates) = {len(additional_pairs)}")
 
     # из данного списка пар исключены узлы, которые отсутствуют в `unique_uids`
     filtered_pairs:list[tuple[int,int]] = list(filter(lambda x: x[1] in unique_uids, additional_pairs))
-    logger.info("Count of pairs with would be added to origin list = {len(filtered_pairs)}")
+    logger.info(f"Count of pairs with would be added to origin list = {len(filtered_pairs)}")
 
     #list_of_friendship_pairs:list[list[tuple[int, int]]] = get_friendships_pairs_for_each_uid(unique_uids)
     # пары друзей для множества `uids_to_process`
     friendship_pairs:list[tuple[int,int]] = concat(get_friendships_pairs_for_each_uid(uids_to_process))
 
     all_pairs = set(additional_pairs + friendship_pairs)
-    logger.info("Count of all friends pairs  = {len(all_pairs)}")
+    logger.info(f"Count of all friends pairs  = {len(all_pairs)}")
 
     return all_pairs
 
@@ -172,10 +172,8 @@ if __name__ == "__main__":
     src  = os.path.join(dir_path, csv_file)
     dest = os.path.join(neo4j_import_dir, csv_file) 
 
-    set_of_friendship_pairs:set[tuple[int, int]] = concat(process_uids_execute_version(config))
-    print(set_of_friendship_pairs)
-
-    #truncate_file(csv_file)
+    set_of_friendship_pairs:set[tuple[int, int]] = process_uids_execute_version(config)
+    print(len(set_of_friendship_pairs))
 
     write_pairs_into_csv(csv_file, set_of_friendship_pairs)
 
@@ -191,5 +189,5 @@ if __name__ == "__main__":
         , neo4j["database"]
     )
     #neo4j_db.detach_delete_nodes("Person")
-    neo4j_db.load_from_csv(csv_file, "Person", "IS_FRIENDS_WITH")
+    neo4j_db.load_from_csv(csv_file, "PersonLight", "IS_FRIENDS_WITH")
     neo4j_db.close()
