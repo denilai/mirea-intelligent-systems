@@ -30,7 +30,7 @@
 
 8:
     msg: Invalid query
-    action: break
+    action: skip
     MatchedHTTPError: 404
 9:  
     msg: Too many same type actions
@@ -53,10 +53,10 @@
     MatchedHTTPError: 404
 29:
     msg: Rate limit reached
-    action: skip
+    action: break
     MatchedHTTPError: 430
 
 30:
     msg: Private profile
     action: skip
-    MatchedHTTPError: 403
+    MatchedHTTPError: 404
