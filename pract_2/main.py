@@ -143,18 +143,18 @@ def process_uids_execute_version(config) -> set[tuple[int, int]]:
     
     # пары, которыми будет обогащен основной набор
     additional_pairs:list[tuple[int,int]] = concat(get_friendships_pairs_for_each_uid(fr_2_lvl))
-    logger.info("Count of additional pairs (friends of friends of classmates) = {len(additional_pairs)}")
+    logger.info(f"Count of additional pairs (friends of friends of classmates) = {len(additional_pairs)}")
 
     # из данного списка пар исключены узлы, которые отсутствуют в `unique_uids`
     filtered_pairs:list[tuple[int,int]] = list(filter(lambda x: x[1] in unique_uids, additional_pairs))
-    logger.info("Count of pairs with would be added to origin list = {len(filtered_pairs)}")
+    logger.info(f"Count of pairs with would be added to origin list = {len(filtered_pairs)}")
 
     #list_of_friendship_pairs:list[list[tuple[int, int]]] = get_friendships_pairs_for_each_uid(unique_uids)
     # пары друзей для множества `uids_to_process`
     friendship_pairs:list[tuple[int,int]] = concat(get_friendships_pairs_for_each_uid(uids_to_process))
 
     all_pairs = set(additional_pairs + friendship_pairs)
-    logger.info("Count of all friends pairs  = {len(all_pairs)}")
+    logger.info(f"Count of all friends pairs  = {len(all_pairs)}")
 
     return all_pairs
 
@@ -191,5 +191,5 @@ if __name__ == "__main__":
         , neo4j["database"]
     )
     #neo4j_db.detach_delete_nodes("Person")
-    neo4j_db.load_from_csv(csv_file, "Person", "IS_FRIENDS_WITH")
+    neo4j_db.load_from_csv(csv_file, "Person"+now_str, "IS_FRIENDS_WITH")
     neo4j_db.close()
