@@ -50,7 +50,10 @@ class Neo4jAgent:
             query  = "load csv from $src as line\n"
             query += f"merge (p1:{label} {{id:line[0]}})\n"
             query += f"merge (p2:{label} {{id:line[1]}})\n"
-            query += f"merge (p1)-[:{relationship}]->(p2);"
+            # Хоть в neo4j все связи являются ориентированными,
+            # оператор `merge` не различает (p1)-[:rel]->(p2) и (p2)-[:rel]->(p1),
+            # если указать шаблон в виде `(p1)-[:rel]-(p2)` (не указывать направление отношения)
+            query += f"merge (p1)-[:{relationship}]-(p2);"
             logger.info(f"Load {filepath}")
             tx.run(query, src = src)
 
