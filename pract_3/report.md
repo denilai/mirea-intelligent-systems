@@ -20,6 +20,8 @@ return n.id, n.eigenvector_centrality
 order by n.closeness_centrality desc;
 ```
 Резульат:
+
+Лидер: [Ссылка](https://vk.com/id212487510)
 ```
 ╒═══════════╤══════════════════════╕
 │n.id       │n.closeness_centrality│
@@ -95,6 +97,7 @@ return n.id, n.betweenness
 order by n.betweenness desc;
 ```
 Результат:
+Лидер: [Ссылка](https://vk.com/id212487510)
 ```
 ╒═══════════╤══════════════════╕
 │n.id       │n.betweenness     │
@@ -182,6 +185,7 @@ order by n.eigenvector_centrality desc;
 ```
 Результат:
 
+Лидер: (https://vk.com/id256804252)
 ```
 ╒═══════════╤════════════════════════╕
 │n.id       │n.eigenvector_centrality│
