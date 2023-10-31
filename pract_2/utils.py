@@ -1,21 +1,45 @@
-from typing import Dict, Any, Callable, Tuple, Mapping
+from typing import Dict, Any, Callable, Tuple, Mapping, Iterable
+from functools import reduce
 import sys
 import yaml
 import logging
 import os
 import subprocess as subproc
 import re
+import csv
+
+
+# Предел количества элементов,
+# которые могут быть обработаны в одном методе `execute`
+API_LIST_THRESHOLD = 20
 
 def create_logger(app_name):
     """Create a logging interface"""
-    logging_level = os.getenv('LOG_LVL', logging.INFO)
+    if len(app_name) > 6:
+        assert False, "Logger name too long"
+    logging_level = os.getenv("LOG_LVL", logging.INFO)
     logging.basicConfig(
         level=logging_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger(app_name)
+    logger = logging.getLogger(f"{app_name:^6}")
     return logger
 
 logger = create_logger("Utils")
+
+
+def concat(iters:Iterable):
+    return list(reduce(lambda x,y: x+y, iters, []))
+
+def copy_file_to_remote_host(src:str, dest:str, host:str, user:str) -> None:
+    cmd  = f"scp {src} {user}@{host}:{dest}"
+    exec_cmd(cmd.split(" "))
+    logger.info(f"Сopy {src} to {host}:{dest}")
+
+
+def truncate_file(filename:str) -> None:
+    open(filename, "w")
+    logger.info(f"Truncate file {filename}")
+
 
 _find_unsafe = re.compile(r'[^\w@%+=:,./-]', re.ASCII).search
 
@@ -84,3 +108,16 @@ def exec_cmd(cmd: list[str]) -> str:
         output=f"   | Command {cmd_str} failed with exit code {error.returncode}\n   | Output: {error.output}"
         raise subproc.CalledProcessError(error.returncode, error.cmd, output)
 
+def read_from_сsv(filename, delimiter=","):
+    res = []
+    with open(filename) as f:
+        spamreader = csv.reader(f,delimiter = delimiter)
+        for row in spamreader:
+            res.append(tuple(row))
+    return res
+
+def write_pairs_into_csv(filename, pairs):
+    logger.info(f"Write {len(pairs)} friednships pairs into file {filename}")
+    with open(filename, "a") as f:
+        spamwriter = csv.writer(f,delimiter = ",")
+        spamwriter.writerows(pairs)
