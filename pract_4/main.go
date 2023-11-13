@@ -15,6 +15,8 @@ import (
 
 // Управляющие параметры
 const (
+	// количество попыток построить генераций случайного поля
+	GEN_TRY_COUNT uint = 10
 	// процент заполнения ячеек на поле
 	FILLING_THRESHOLD float64 = 0.65
 	// размер одной ячейки в пикселях
@@ -24,7 +26,7 @@ const (
 	// порог счастья
 	HAPPY_THRESHOLD uint = 2
 	// Размер поля
-	FIELD_SIZE uint = 200
+	FIELD_SIZE uint = 300
 	// Отрисовывать каждые n итераций
 	DRAW_EVERY uint = 1
 	DEBUG      bool = false
@@ -111,14 +113,16 @@ type SField struct {
 	Grid []Street
 }
 
-//func (sf SField) Show() {
-//	for _, street := range sf.Grid {
-//		fmt.Println(street)
-//		//for x := range sf.Grid {
-//		//	fmt.Printf("Grid [%v][%v] = %v\n", y, x, sf.Grid[y][x])
-//		//}
-//	}
-//}
+type SFieldStats struct {
+	All         uint
+	Filled      uint
+	Empty       uint
+	Happy       uint
+	Unhappy     uint
+	FillFactor  float64
+	HappyFactor float64
+	TagMap      map[Color]uint
+}
 
 func (sf *SField) Clean() {
 	for row := range sf.Grid {
@@ -142,35 +146,27 @@ func (sf *SField) Inhabit(hs []House) {
 	}
 }
 
-//func (sf SField) GetHappyCitizens() []Citizen {
-//	happy := make([]Citizen, 0, sf.Size)
-//	for _, street := range sf.Grid {
-//		for _, house := range street {
-//			c, ok := house.(*Citizen)
-//			if !ok {
-//				continue
-//			}
-//			if c.Happy {
-//				happy = append(happy, *c)
-//			}
-//		}
-//	}
-//	return happy
-//}
-
 func (sf *SField) HappinesAssessment() {
 	allHouses := sf.FlattenHouses()
 	for _, house := range allHouses {
-		if count, _ := sf.CountOfNeighbours(house); count <= int(HAPPY_THRESHOLD) {
+		if count, err := sf.CountOfNeighbours(house); err != nil {
 			continue
-		}
-		if c, ok := house.(*Citizen); ok {
-			if DEBUG {
-				log.Printf("%v is happy!", c)
-			}
-			c.Happy = true
 		} else {
-			log.Panic("Неожиданный тип. Ожидался *Citizen, получен %T", house)
+			if c, ok := house.(*Citizen); ok {
+				if count < int(HAPPY_THRESHOLD) {
+					if DEBUG {
+						log.Printf("%v is't happy(", c)
+					}
+					c.Happy = false
+				} else {
+					if DEBUG {
+						log.Printf("%v is happy!", c)
+					}
+					c.Happy = true
+				}
+			} else {
+				log.Panic("Неожиданный тип. Ожидался *Citizen, получен %T", house)
+			}
 		}
 	}
 }
@@ -190,46 +186,13 @@ func NewSField(size uint) SField {
 	return SField{size, grid}
 }
 
-//
-//// Создать жильцов
-//func CreateCitizens(size uint) []Citizen {
-//	defer Duration(Track("CreateCitizens"))
-//	numberOfCells := int(math.Pow(float64(size), 2))
-//	log.Printf("Количество ячеек = %v", numberOfCells)
-//	numberOfFreeCells := int(float64(numberOfCells) * FILLING_THRESHOLD)
-//	log.Printf("Количество пригодных для заселения ячеек = %v, что составляет %0.2f%%", numberOfFreeCells, float64(numberOfFreeCells)/float64(numberOfCells)*100)
-//	citizens := make([]Citizen, numberOfFreeCells)
-//
-//	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-//	for i := range citizens {
-//		color := Color(r.Intn(2))
-//		//log.Printf("Create citizen with color: %v", color)
-//		citizens[i] = Citizen{color, false, Addr{}}
-//	}
-//	return citizens
-//}
-//
-//func (sf *SField) Shuffle() {
-//	allHouses := sf.FlattenHouses()
-//	rand.Seed(time.Now().UnixNano())
-//	rand.Shuffle(len(allHouses), func(i, j int) { allHouses[i], allHouses[j] = allHouses[j], allHouses[i] })
-//	for row := uint(0); row < sf.Size; row++ {
-//		for col := uint(0); col < sf.Size; col++ {
-//			curH := allHouses[row*sf.Size+col]
-//			fmt.Printf("%v ->", curH.GetAddr())
-//			allHouses[row*sf.Size+col].SetAddr(Addr{Row: row, Col: col})
-//			fmt.Printf("%v\n", curH.GetAddr())
-//		}
-//	}
-//}
-
-func (sf SField) Stats() {
+func (sf SField) Stats() SFieldStats {
 	allHouses := sf.FlattenHouses()
-	emptyCount := len(Filter(func(h House) bool { return h.IsEmpty() }, allHouses))
-	happyCount := 0
-	unhappyCount := 0
-	allCount := len(allHouses)
-	tagMap := make(map[Color]int)
+	emptyCount := uint(len(Filter(func(h House) bool { return h.IsEmpty() }, allHouses)))
+	happyCount := uint(0)
+	unhappyCount := uint(0)
+	allCount := uint(len(allHouses))
+	tagMap := make(map[Color]uint)
 	for _, h := range allHouses {
 		if c, ok := h.(*Citizen); ok {
 			if c.Happy {
@@ -244,17 +207,25 @@ func (sf SField) Stats() {
 			}
 		}
 	}
-	fmt.Println("Статистика SField:")
-	fmt.Println("Кол-во ячеек:", allCount)
-	fmt.Println("Из них:")
-	fmt.Println("  Пустых:", emptyCount)
-	fmt.Println("  Заполненных:", allCount-emptyCount)
-	fmt.Printf("  Коэффициент заполнения: %.2f\n", float64(allCount-emptyCount)/float64(allCount))
-	fmt.Println("  Из них (по цветам):")
-	fmt.Println("    ", tagMap)
-	fmt.Println("  Из них (по счастью):")
-	fmt.Println("    Несчастливых:", unhappyCount)
-	fmt.Println("    Счастливых:", happyCount)
+	return SFieldStats{All: allCount, Filled: allCount - emptyCount, Empty: emptyCount, FillFactor: float64(allCount-emptyCount) / float64(allCount), TagMap: tagMap, Happy: happyCount, Unhappy: unhappyCount, HappyFactor: float64(happyCount) / float64(allCount-emptyCount)}
+}
+
+func (s SFieldStats) String() string {
+	res := "================\n"
+	res += fmt.Sprintf("Статистика SField:\n")
+	res += fmt.Sprintf("Кол-во ячеек: %v\n", s.All)
+	res += fmt.Sprint("Из них:\n")
+	res += fmt.Sprintf("  Пустых: %v\n", s.Empty)
+	res += fmt.Sprintf("  Заполненных: %v\n", s.Filled)
+	res += fmt.Sprint("  Из них (по цветам):\n")
+	res += fmt.Sprintf("    %v\n", s.TagMap)
+	res += fmt.Sprint("  Из них (по счастью):\n")
+	res += fmt.Sprintf("    Несчастливых: %v\n", s.Unhappy)
+	res += fmt.Sprintf("    Счастливых: %v\n", s.Happy)
+	res += fmt.Sprintf("  Коэффициент заполнения: %.2f\n", s.FillFactor)
+	res += fmt.Sprintf("  Коэффициент счастья: %.2f\n", s.HappyFactor)
+	res += "================\n"
+	return res
 }
 
 func CreateHouses(fsize uint) []House {
@@ -278,37 +249,22 @@ func CreateHouses(fsize uint) []House {
 	return hs
 }
 
-func MyShuffle[T any](list []T) {
-	rand.Seed(time.Now().UnixNano())
-	rand.Shuffle(len(list), func(i, j int) { list[i], list[j] = list[j], list[i] })
+// seed = -1 --  значение по умолчанию (сгенерировать зерно)
+func MyShuffle[T any](list []T, seed int64) int64 {
+	if seed == -1 {
+		seed = time.Now().UnixNano()
+	}
+	ns := rand.New(rand.NewSource(seed))
+	ns.Shuffle(len(list), func(i, j int) { list[i], list[j] = list[j], list[i] })
+	return seed
 }
 
 func ShuffleHouses(hs []House) {
-	rand.Seed(time.Now().UnixNano())
-	MyShuffle(hs)
+	MyShuffle(hs, -1)
 	if DEBUG {
 		log.Printf("Горожане перемешаны")
 	}
 }
-
-//func Dense(fsize uint) []House {
-//	defer Duration(Track("Dense"))
-//	numberOfCells := int(math.Pow(float64(fsize), 2))
-//	log.Printf("Количество ячеек = %v", numberOfCells)
-//	numberOfNECells := int(float64(numberOfCells) * FILLING_THRESHOLD)
-//	numberOfEmptyCells := int(float64(numberOfCells) * (1 - int(FILLING_THRESHOLD)))
-//	log.Printf("Количество пригодных для заселения ячеек = %v, что составляет %0.2f%%", numberOfNECells, float64(numberOfNECells)/float64(numberOfCells)*100)
-//	citizens := make([]House, numberOfNECells)
-//	empty := make([]Empty, numberOfEmptyCells)
-//
-//	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-//	for i := range citizens {
-//		color := Color(r.Intn(2))
-//		//log.Printf("Create citizen with color: %v", color)
-//		citizens[i] = Citizen{color, false, Addr{}}
-//	}
-//	hs := append(citi
-//}
 
 // Выдать жильцам адреса
 func RegisterCitizens(citizens []Citizen, size uint) []Citizen {
@@ -378,9 +334,6 @@ func (sf SField) Render(filename string, drawHappines bool) {
 			if !ok {
 				log.Panicf("Несуществующий цвет под тэгом: %v", tag)
 			}
-			//if DEBUG {
-			//	log.Printf("Выбран цвет: %v", tag)
-			//}
 			ctx.SetColor(color)
 			ctx.Fill()
 			if isCitizen && drawHappines {
@@ -401,7 +354,7 @@ func (sf SField) Render(filename string, drawHappines bool) {
 			}
 		}
 	}
-	log.Printf("Создаем изображение %v...", filename)
+	fmt.Printf("Создаем изображение %v...", filename)
 	if er := ctx.SavePNG(filename); er != nil {
 		log.Println("Error in SavePNG")
 	}
@@ -460,41 +413,6 @@ func Filter[T any](f func(T) bool, data []T) []T {
 	return fltd
 }
 
-//func (sf SField) CountOfHouses() int {
-//	return int(math.Pow(float64(sf.Size), 2))
-//}
-//
-//func (sf SField) CountOfCitizens() int {
-//	allHouses := sf.FlattenHouses()
-//	citizens := Filter(func(h House) bool { _, ok := h.(*Citizen); return ok }, allHouses)
-//	return len(citizens)
-//}
-
-//func (sf SField) MapCitizens (f func(House) Citzen) []Citizen {
-//	res := []House{}
-//	for _, street := range sf.Grid {
-//		for _, house := range street {
-//			if c,ok:=house.(*Citizen); ok {
-//				res = append(res, f(house))
-//			}
-//		}
-//	}
-//	return res
-//
-//}
-
-//func (sf SField) FilterHouses(f func(House) bool) []House {
-//	res := []House{}
-//	for _, street := range sf.Grid {
-//		for _, house := range street {
-//			if f(house) {
-//				res = append(res, house)
-//			}
-//		}
-//	}
-//	return res
-//}
-
 func (sf SField) FlattenHouses() []House {
 	allHouses := []House{}
 	for i := range sf.Grid {
@@ -513,22 +431,6 @@ func (sf SField) GetUnhappyCitizens() []*Citizen {
 		}
 	}, Filter(func(h House) bool { c, ok := h.(*Citizen); return ok && !c.Happy }, sf.FlattenHouses()))
 }
-
-//	//allHouses := []House{}
-//	//for i := range sf.Grid {
-//	//	allHouses = append(allHouses, sf.Grid[i]...)
-//	//}
-//	//fmt.Println(allHouses)
-//	unhappyHouses := sf.FilterHouses(func(h House) bool { c, ok := h.(*Citizen); return ok && !c.Happy })
-//	res := Map(func(h House) *Citizen {
-//		if c, ok := h.(*Citizen); ok {
-//			return c
-//		} else {
-//			return nil
-//		}
-//	}, unhappyHouses)
-//	return res
-//}
 
 func EraseElem[T any](data []T, i int) []T {
 	data[i] = data[len(data)-1]
@@ -559,7 +461,7 @@ func (sf *SField) ShuffleUnhappyCells() error {
 	if DEBUG {
 		fmt.Printf("Места для переселения: %v, len = %v\n", moveTo, len(moveTo))
 	}
-	MyShuffle(moveTo)
+	MyShuffle(moveTo, -1)
 	if DEBUG {
 		log.Printf("Места перемешаны")
 	}
@@ -578,11 +480,7 @@ func (sf *SField) ShuffleUnhappyCells() error {
 }
 
 func (sf SField) GetEmptyAddreses() []Addr {
-	//emptyAddrs := make([]Addr, 0, int(math.Pow(float64(FIELD_SIZE), 2)))
 	return Map(func(h House) Addr { return h.GetAddr() }, Filter(func(h House) bool { return h.IsEmpty() }, sf.FlattenHouses()))
-	//emptyHouses := sf.FilterHouses(func(h House) bool { _, ok := h.(*Empty); return ok })
-	//emptyAddrs := Map(func(h House) Addr { return h.GetAddr() }, emptyHouses)
-	//return emptyAddrs
 }
 
 //func test1() {
@@ -600,8 +498,8 @@ func (sf SField) GetEmptyAddreses() []Addr {
 //	}
 //}
 
-func RandomRegistration(hs []House) {
-	MyShuffle(hs)
+func RandomRegistration(hs []House, seed int64) int64 {
+	seed = MyShuffle(hs, seed)
 	if DEBUG {
 		log.Printf("Горожане перемешаны")
 	}
@@ -611,13 +509,8 @@ func RandomRegistration(hs []House) {
 		col := uint(i % int(d))
 		(hs)[i].SetAddr(Addr{Col: col, Row: row})
 	}
+	return seed
 }
-
-//func ShowHS(hs []House) {
-//	for i := range hs {
-//		fmt.Println(*hs[i])
-//	k
-//}
 
 func main() {
 	var filename, foldername string
@@ -640,11 +533,30 @@ func main() {
 	// Создаем житилей согласно коэффициенту заполнения и пропорциям
 	houses := CreateHouses(fsize)
 	// Случайно выдаем адреса
-	RandomRegistration(houses)
-	citizens := Filter(func(h House) bool { return !h.IsEmpty() }, houses)
+	var minHappyFactor float64 = 1
+	var seed int64
 	sf := NewSField(fsize)
+	for i := 0; i < int(GEN_TRY_COUNT); i++ {
+		s := RandomRegistration(houses, -1)
+		citizens := Filter(func(h House) bool { return !h.IsEmpty() }, houses)
+		// Населяем поле жителями
+		sf.Inhabit(citizens)
+		curHF := sf.Stats().HappyFactor
+		log.Printf("Фактор cчастья = %v", curHF)
+		log.Printf("Зерно = %v", s)
+		if curHF < minHappyFactor {
+			minHappyFactor = curHF
+			seed = s
+		}
+	}
+	if DEBUG {
+		log.Printf("Минимальный фактор счастья = %v с зерном %v", minHappyFactor, seed)
+	}
+	RandomRegistration(houses, seed)
+	citizens := Filter(func(h House) bool { return !h.IsEmpty() }, houses)
 	// Населяем поле жителями
 	sf.Inhabit(citizens)
+
 	sf.Stats()
 	// Отрисовываем изначальное распределение (без обозачения счастья)
 	//sf.Render("init.png", false)
@@ -653,44 +565,18 @@ func main() {
 		sf.HappinesAssessment()
 		// Определить новые адреса для несчастливых жителей
 		// Заселить несчастливых по новым адресам
+		if err := sf.ShuffleUnhappyCells(); err != nil {
+			fmt.Println(err)
+			fmt.Println(sf.Stats())
+			sf.Render("final.png", true)
+			os.Exit(1)
+		}
+		sf.Inhabit(citizens)
 		if i%int(DRAW_EVERY) == 0 {
 			filename = fmt.Sprintf("%v.png", i)
 			//filenameM := fmt.Sprintf("%vm.png", i)
 			sf.Render(filename, false)
 			//sf.Render(filenameM, true)
 		}
-		if err := sf.ShuffleUnhappyCells(); err != nil {
-			os.Exit(1)
-		}
-		sf.Inhabit(citizens)
-		//os.Exit(1)
 	}
 }
-
-//func main1() {
-//	var filename string
-//	filename = time.Now().String()[:19]
-//	fieldSize := FIELD_SIZE
-//	citizens := CreateCitizens(fieldSize)
-//	citizens = RegisterCitizens(citizens, fieldSize)
-//	sf := NewSField(fieldSize)
-//	sf.Inhabit(citizens)
-//	sf.HappinesAssessment()
-//	unhappyCoeff := float64(len(sf.GetUnhappyCitizens())) / float64(sf.CountOfCitizens())
-//	fmt.Printf("Коэффициент несчастливых жителей = %.3f", unhappyCoeff)
-//	//os.Exit(1)
-//	sf.Render(filename + ".png")
-//	sf.Shuffle()
-//	sf.Inhabit(citizens)
-//	sf.Render(filename + "sh" + ".png")
-//	os.Exit(1)
-//	for i := 0; i < int(ITER_COUNT); i++ {
-//		sf.HappinesAssessment()
-//		sf.ShuffleUnhappyCells()
-//		sf.Inhabit(citizens)
-//		if i%1 == 0 {
-//			f := fmt.Sprintf("%v_%v.png", filename, i)
-//			sf.Render(f)
-//		}
-//	}
-//}
