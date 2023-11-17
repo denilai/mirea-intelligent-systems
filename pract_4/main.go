@@ -18,17 +18,17 @@ const (
 	// количество попыток построить генераций случайного поля
 	GEN_TRY_COUNT uint = 10
 	// процент заполнения ячеек на поле
-	FILLING_THRESHOLD float64 = 0.65
+	FILLING_THRESHOLD float64 = 0.9
 	// размер одной ячейки в пикселях
 	CELL_SIZE_PX uint = 10
 	// количество итераций
 	ITER_COUNT uint = 10000
 	// порог счастья
-	HAPPY_THRESHOLD uint = 2
+	HAPPY_THRESHOLD uint = 4
 	// Размер поля
-	FIELD_SIZE uint = 300
+	FIELD_SIZE uint = 100
 	// Отрисовывать каждые n итераций
-	DRAW_EVERY uint = 1
+	DRAW_EVERY uint = 5
 	DEBUG      bool = false
 )
 
@@ -354,7 +354,7 @@ func (sf SField) Render(filename string, drawHappines bool) {
 			}
 		}
 	}
-	fmt.Printf("Создаем изображение %v...", filename)
+	fmt.Printf("Создаем изображение %v ...\n", filename)
 	if er := ctx.SavePNG(filename); er != nil {
 		log.Println("Error in SavePNG")
 	}
