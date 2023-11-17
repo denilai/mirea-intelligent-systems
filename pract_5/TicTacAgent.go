@@ -55,6 +55,15 @@ func (fig Figure) String() string {
 
 // Game methods
 
+func (g Game) BoardPlaces() []Place {
+	size := g.Size
+	ps := make([]Place, size*size)
+	for i := range ps {
+		ps[i] = Place{Row: uint(uint(i) / size), Col: uint(uint(i) % size)}
+	}
+	return ps
+}
+
 func (g *Game) Copy(g1 Game) error {
 	if g.Size != g1.Size {
 		return fmt.Errorf("Размеры доcок не совпадают")
@@ -67,65 +76,60 @@ func (g *Game) Copy(g1 Game) error {
 	return nil
 }
 
-func (b *Game) Set(p Place, fig Figure) {
-	b.Board[p.Row][p.Col] = fig
+func (g *Game) Set(p Place, fig Figure) {
+	g.Board[p.Row][p.Col] = fig
 }
 
 func NewGame(size uint) Game {
-	b := make([][]Cell, size)
-	for i := range b {
-		b[i] = make([]Cell, size)
-		for j := range b[i] {
-			b[i][j] = Empty{}
+	g := make([][]Cell, size)
+	for i := range g {
+		g[i] = make([]Cell, size)
+		for j := range g[i] {
+			g[i][j] = Empty{}
 		}
 	}
-	return Game{size, b}
+	return Game{size, g}
 }
 
-func (b Game) String() string {
-	rs := fmt.Sprintf("Game [%vx%v]", b.Size, b.Size)
+func (g Game) String() string {
+	rs := fmt.Sprintf("Game [%vx%v]", g.Size, g.Size)
 	rs += "\n"
-	//hDelim := Reduce(func(s string, _ []Cell) string { return s + "--" }, b.Game, "")
-	//rs += hDelim
-	//rs += "\n"
-	for row := range b.Board {
-		for col := range b.Board[row] {
-			rs += fmt.Sprintf("|%v", b.Board[row][col])
+	//hDelim := Reduce(func(s string, _ []Cell) string { return s + "--" }, g.Game, "")
+	for row := range g.Board {
+		for col := range g.Board[row] {
+			rs += fmt.Sprintf("|%v", g.Board[row][col])
 		}
 		rs += "|\n"
 	}
-	//rs += hDelim
 	rs += "\n"
 	return rs
 }
 
 // Common functions
 
-func Step(b Game, fig Figure) []Game {
+func Step(g Game, fig Figure, p Place) Game {
 	if DEBUG {
 		Duration(Track("Step"))
 	}
-	bs := make([]Game, 0, b.Size*b.Size)
-	for i, row := range b.Board {
-		for j := range row {
-			if row[j].IsEmpty() {
-				newB := NewGame(3)
-				newB.Copy(b)
-				newB.Board[i][j] = fig
-				bs = append(bs, newB)
-			}
-		}
+	newG := NewGame(g.Size)
+	newG.Copy(g)
+	newG.Board[p.Row][p.Col] = fig
+	return newG
+}
+
+func Steps(g Game, fig Figure) []Game {
+	if DEBUG {
+		Duration(Track("Steps"))
 	}
-	return bs
+	return Map(func(p Place) Game { return Step(g, fig, p) }, g.BoardPlaces())
 }
 
 // Main
 func main() {
-	B := NewGame(3)
-	B.Set(Place{1, 1}, X)
-	//B.Set(Place{1, 0}, O)
-	fmt.Println(B)
-	for _, b := range Step(B, X) {
-		fmt.Println(b)
+	G := NewGame(3)
+	G.Set(Place{1, 1}, X)
+	fmt.Println(G)
+	for _, g := range StepsM(G, X) {
+		fmt.Println(g)
 	}
 }
