@@ -2,11 +2,14 @@ package main
 
 import (
 	"fmt"
+	"slices"
 )
 
 const (
 	DEBUG bool = true
 )
+
+type Maybe[T any] interface{}
 
 type Figure byte
 
@@ -55,6 +58,29 @@ func (fig Figure) String() string {
 
 // Game methods
 
+func (g Game) IsEnd() (bool, Maybe[Figure]) {
+	byRow := func() Maybe[Figure] {
+		// по строкам
+		for _, row := range g.Board {
+			f := row[0]
+			if f.IsEmpty() {
+				continue
+			}
+			for j := range row[1:] {
+				if row[j] != f {
+					break
+				}
+				return f
+			}
+		}
+		return nil
+	}()
+	if byRow != nil {
+		return true, byRow
+	}
+	return false, nil
+}
+
 func (g Game) BoardPlaces() []Place {
 	size := g.Size
 	ps := make([]Place, size*size)
@@ -76,19 +102,27 @@ func (g *Game) Copy(g1 Game) error {
 	return nil
 }
 
-func (g *Game) Set(p Place, fig Figure) {
+// Безусловно заменяет фигуру в ячейке (ячейка может быть перезаписана)
+func (g *Game) Set(p Place, fig Figure) error {
+	if !slices.Contains(g.BoardPlaces(), p) {
+		return fmt.Errorf("Некорректный ход: адрес ячейки задан неверно")
+	}
 	g.Board[p.Row][p.Col] = fig
+	return nil
+}
+
+func (b Board) Clear() {
+	for i := range b {
+		for j := range b[i] {
+			b[i][j] = Empty{}
+		}
+	}
 }
 
 func NewGame(size uint) Game {
-	g := make([][]Cell, size)
-	for i := range g {
-		g[i] = make([]Cell, size)
-		for j := range g[i] {
-			g[i][j] = Empty{}
-		}
-	}
-	return Game{size, g}
+	b := Board(NewMatrix[Cell](size, size))
+	b.Clear()
+	return Game{size, b}
 }
 
 func (g Game) String() string {
@@ -107,29 +141,48 @@ func (g Game) String() string {
 
 // Common functions
 
-func Step(g Game, fig Figure, p Place) Game {
+// Корректный ход в игре. Ячейка не может быть перезаписана
+func Step(g Game, fig Figure, p Place) Maybe[Game] {
 	if DEBUG {
 		Duration(Track("Step"))
 	}
 	newG := NewGame(g.Size)
 	newG.Copy(g)
-	newG.Board[p.Row][p.Col] = fig
+	if !slices.Contains(g.BoardPlaces(), p) {
+		return fmt.Errorf("Некорректный ход: адрес ячейки задан неверно")
+	}
+	if !g.Board[p.Row][p.Col].IsEmpty() {
+		return fmt.Errorf("Некорректный ход: ячейка %v занята", p)
+	}
+	newG.Set(p, fig)
 	return newG
 }
 
-func Steps(g Game, fig Figure) []Game {
+func Steps(g Game, fig Figure) []Maybe[Game] {
 	if DEBUG {
 		Duration(Track("Steps"))
 	}
-	return Map(func(p Place) Game { return Step(g, fig, p) }, g.BoardPlaces())
+	return Map(func(p Place) Maybe[Game] { g := Step(g, fig, p); return g }, g.BoardPlaces())
 }
 
 // Main
 func main() {
+	fmt.Println(NewMatrix[Empty](3, 3))
 	G := NewGame(3)
-	G.Set(Place{1, 1}, X)
 	fmt.Println(G)
-	for _, g := range StepsM(G, X) {
-		fmt.Println(g)
+	err := G.Set(Place{1, 1}, X)
+	if err != nil {
+		panic(err)
 	}
+	err = G.Set(Place{1, 2}, O)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(G)
+	G.Board = TransposeOpt[Cell](G.Board)
+	fmt.Println(G)
+
+	//for _, g := range Steps(G, X) {
+	//	fmt.Println(g)
+	//}
 }
