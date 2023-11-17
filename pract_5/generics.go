@@ -1,5 +1,27 @@
 package main
 
+func NewMatrix[T any](row, col uint) [][]T {
+	a := make([]T, row*col)
+	m := make([][]T, row)
+	var lo, hi uint = 0, col
+	for i := range m {
+		m[i] = a[lo:hi:hi]
+		lo, hi = hi, hi+col
+	}
+	return m
+}
+
+func TransposeOpt[T any](a [][]T) [][]T {
+	b := NewMatrix[T](uint(len(a[0])), uint(len(a)))
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		for j := 0; j < len(c); j++ {
+			c[j] = a[j][i]
+		}
+	}
+	return b
+}
+
 func Reduce[T, M any](f func(M, T) M, s []T, initValue M) M {
 	acc := initValue
 	for _, v := range s {
