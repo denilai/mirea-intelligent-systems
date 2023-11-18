@@ -31,11 +31,6 @@ type Empty struct{}
 
 type Board [][]Cell
 
-type Game struct {
-	Size  uint
-	Board [][]Cell
-}
-
 // Empty methods
 
 func (Empty) IsEmpty() bool  { return true }
@@ -56,82 +51,103 @@ func (fig Figure) String() string {
 	}
 }
 
-// Game methods
+// Board methods
+func (b Board) Size() int { return len(b[0]) }
 
-func (g Game) IsEnd() (bool, Maybe[Figure]) {
-	byRow := func() Maybe[Figure] {
-		// по строкам
-		for _, row := range g.Board {
-			f := row[0]
-			if f.IsEmpty() {
-				continue
-			}
-			for j := range row[1:] {
-				if row[j] != f {
-					break
-				}
-				return f
-			}
-		}
-		return nil
-	}()
-	if byRow != nil {
-		return true, byRow
-	}
-	return false, nil
-}
+//func check1(b Board) Maybe[Figure] {
+//	// по строкам
+//	for _, row := range b.GetBoard() {
+//		f := row[0]
+//		if f.IsEmpty() {
+//			continue
+//		}
+//		for j := range row[1:] {
+//			if row[j] != f {
+//				break
+//			}
+//			return f
+//		}
+//	}
+//	return nil
+//}
 
-func (g Game) BoardPlaces() []Place {
-	size := g.Size
+//func check2(b Board) Maybe[Figure] {
+//	tspB := TransposeOpt(b)
+//
+//	b.SetBoard(TransposeOpt(b.GetBoard()))
+//	byCol
+//
+//	return false, byRow
+//}
+
+func (b Board) BoardPlaces() []Place {
+	size := b.Size()
 	ps := make([]Place, size*size)
 	for i := range ps {
-		ps[i] = Place{Row: uint(uint(i) / size), Col: uint(uint(i) % size)}
+		ps[i] = Place{Row: uint(i / size), Col: uint(i % size)}
 	}
 	return ps
 }
 
-func (g *Game) Copy(g1 Game) error {
-	if g.Size != g1.Size {
+func CopyBoard(dst, src Board) error {
+	if dst.Size() != src.Size() {
 		return fmt.Errorf("Размеры доcок не совпадают")
 	}
-	for i := range g.Board {
-		for j := range g.Board[i] {
-			g.Board[i][j] = g1.Board[i][j]
-		}
+	for i := range src {
+		dst[i] = src[i]
 	}
 	return nil
+
+	//	for i := range src {
+	//		for j := range src[i] {
+	//			if el, errGet := src.Get(Place{Row: uint(i), Col: uint(j)}); errGet != nil {
+	//				return errGet
+	//			} else if errSet := dst.Set(Place{Row: uint(i), Col: uint(j)}, el); errSet != nil {
+	//				return errSet
+	//			}
+	//		}
+	//	}
+	//
+	// return nil
+}
+
+func (b Board) Get(p Place) (Cell, error) {
+	if !slices.Contains(b.BoardPlaces(), p) {
+		return nil, fmt.Errorf("Некорректный ход: адрес ячейки задан неверно")
+	}
+	return b[p.Row][p.Col], nil
 }
 
 // Безусловно заменяет фигуру в ячейке (ячейка может быть перезаписана)
-func (g *Game) Set(p Place, fig Figure) error {
-	if !slices.Contains(g.BoardPlaces(), p) {
+func (b *Board) Set(p Place, cell Cell) error {
+	if !slices.Contains(b.BoardPlaces(), p) {
 		return fmt.Errorf("Некорректный ход: адрес ячейки задан неверно")
 	}
-	g.Board[p.Row][p.Col] = fig
+	(*b)[p.Row][p.Col] = cell
 	return nil
 }
 
 func (b Board) Clear() {
 	for i := range b {
 		for j := range b[i] {
-			b[i][j] = Empty{}
+			b.Set(Place{Row: uint(i), Col: uint(j)}, Empty{})
 		}
 	}
 }
 
-func NewGame(size uint) Game {
+func NewBoard(size uint) Board {
 	b := Board(NewMatrix[Cell](size, size))
 	b.Clear()
-	return Game{size, b}
+	return b
 }
 
-func (g Game) String() string {
-	rs := fmt.Sprintf("Game [%vx%v]", g.Size, g.Size)
+func (b Board) String() string {
+	rs := fmt.Sprintf("Board [%vx%v]", b.Size(), b.Size())
 	rs += "\n"
-	//hDelim := Reduce(func(s string, _ []Cell) string { return s + "--" }, g.Game, "")
-	for row := range g.Board {
-		for col := range g.Board[row] {
-			rs += fmt.Sprintf("|%v", g.Board[row][col])
+	//hDelim := Reduce(func(s string, _ []Cell) string { return s + "--" }, b.Board, "")
+	for _, row := range b {
+		for _, cell := range row {
+			rs += fmt.Sprintf("|%v", cell)
 		}
 		rs += "|\n"
 	}
@@ -142,47 +158,48 @@ func (g Game) String() string {
 // Common functions
 
 // Корректный ход в игре. Ячейка не может быть перезаписана
-func Step(g Game, fig Figure, p Place) Maybe[Game] {
+func Step(b Board, fig Figure, p Place) Maybe[Board] {
 	if DEBUG {
 		Duration(Track("Step"))
 	}
-	newG := NewGame(g.Size)
-	newG.Copy(g)
-	if !slices.Contains(g.BoardPlaces(), p) {
+	newG := NewBoard(uint(b.Size()))
+	CopyBoard(newG, b)
+	if !slices.Contains(b.BoardPlaces(), p) {
 		return fmt.Errorf("Некорректный ход: адрес ячейки задан неверно")
 	}
-	if !g.Board[p.Row][p.Col].IsEmpty() {
+	if cell, err := b.Get(p); err != nil {
+		panic(err)
+	} else if cell.IsEmpty() {
 		return fmt.Errorf("Некорректный ход: ячейка %v занята", p)
 	}
-	newG.Set(p, fig)
+	if err := newG.Set(p, fig); err != nil {
+		return err
+	}
 	return newG
 }
 
-func Steps(g Game, fig Figure) []Maybe[Game] {
+func Steps(b Board, fig Figure) []Maybe[Board] {
 	if DEBUG {
 		Duration(Track("Steps"))
 	}
-	return Map(func(p Place) Maybe[Game] { g := Step(g, fig, p); return g }, g.BoardPlaces())
+	return Map(func(p Place) Maybe[Board] { b := Step(b, fig, p); return b }, b.BoardPlaces())
 }
 
 // Main
 func main() {
-	fmt.Println(NewMatrix[Empty](3, 3))
-	G := NewGame(3)
+	G := NewBoard(3)
 	fmt.Println(G)
-	err := G.Set(Place{1, 1}, X)
-	if err != nil {
+	if err := G.Set(Place{1, 1}, X); err != nil {
 		panic(err)
 	}
-	err = G.Set(Place{1, 2}, O)
-	if err != nil {
+	if err := G.Set(Place{1, 2}, O); err != nil {
 		panic(err)
 	}
 	fmt.Println(G)
-	G.Board = TransposeOpt[Cell](G.Board)
+	G = TransposeOpt(G)
 	fmt.Println(G)
 
-	//for _, g := range Steps(G, X) {
-	//	fmt.Println(g)
+	//for _, b := range Steps(G, X) {
+	//	fmt.Println(b)
 	//}
 }
