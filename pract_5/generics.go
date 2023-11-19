@@ -53,3 +53,10 @@ func Filter[T any](f func(T) bool, data []T) []T {
 	}
 	return fltd
 }
+
+func All[T any](f func(T) bool, xs []T) bool {
+	return Reduce(func(a bool, b T) bool { return a && f(b) }, xs, true)
+}
+func Any[T any](f func(T) bool, xs []T) bool {
+	return Reduce(func(a bool, b T) bool { return a || f(b) }, xs, true)
+}
