@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"slices"
+
+	"github.com/denilai/maybe"
 )
 
 const (
-	DEBUG bool = true
+	DEBUG bool = false
 )
-
-type Maybe[T any] interface{}
 
 type Figure byte
 
@@ -54,31 +54,72 @@ func (fig Figure) String() string {
 // Board methods
 func (b Board) Size() int { return len(b[0]) }
 
-//func check1(b Board) Maybe[Figure] {
-//	// по строкам
-//	for _, row := range b.GetBoard() {
-//		f := row[0]
-//		if f.IsEmpty() {
-//			continue
-//		}
-//		for j := range row[1:] {
-//			if row[j] != f {
-//				break
-//			}
-//			return f
-//		}
-//	}
-//	return nil
-//}
+// Возвращает Just(f), если срез заполнен одинаковой Figure, иначе Nothing
+func IsRepeated(xs []Cell) maybe.Maybe[Figure] {
+	if f, ok := xs[0].(Figure); ok && All(func(c Cell) bool { return c == xs[0] }, xs) {
+		return maybe.Just(f)
+	} else {
+		return maybe.Nothing[Figure]()
+	}
+}
 
-//func check2(b Board) Maybe[Figure] {
-//	tspB := TransposeOpt(b)
-//
-//	b.SetBoard(TransposeOpt(b.GetBoard()))
-//	byCol
-//
-//	return false, byRow
-//}
+func RowWinner(b Board) maybe.Maybe[Figure] {
+	if DEBUG {
+		Duration(Track("RowWinner"))
+	}
+	// по строкам
+	rowsCheck := Map(IsRepeated, b)
+	for i := range rowsCheck {
+		if rowsCheck[i].HasValue() {
+			return rowsCheck[i]
+		}
+	}
+	return maybe.Nothing[Figure]()
+}
+
+func ColWinner(b Board) maybe.Maybe[Figure] {
+	if DEBUG {
+		Duration(Track("ColWinner"))
+	}
+	return RowWinner(Board(TransposeOpt(b)))
+}
+
+func MainDiagWinner(b Board) maybe.Maybe[Figure] {
+	if DEBUG {
+		Duration(Track("MainDiagWinner"))
+	}
+	diag := make([]Cell, b.Size())
+	for i := range b {
+		diag[i] = b[i][i]
+	}
+	return IsRepeated(diag)
+}
+
+func SecDiagWinner(b Board) maybe.Maybe[Figure] {
+	if DEBUG {
+		Duration(Track("SecDiagWinner"))
+	}
+	diag := make([]Cell, b.Size())
+	for i := range b {
+		diag[i] = b[i][b.Size()-1-i]
+	}
+	return IsRepeated(diag)
+}
+
+func Winner(b Board) maybe.Maybe[Figure] {
+	if DEBUG {
+		Duration(Track("Winner"))
+	}
+	fmt.Println("Board check")
+	fmt.Println(b)
+	fmt.Println("Find winner")
+	fmt.Printf("%28v: %v\n", "Check by row", RowWinner(b))
+	fmt.Printf("%28v: %v\n", "Check by col", ColWinner(b))
+	fmt.Printf("%28v: %v\n", "Check by main diagonal", MainDiagWinner(b))
+	fmt.Printf("%28v: %v\n", "Check by secondary diagonal", SecDiagWinner(b))
+
+	return maybe.Nothing[Figure]()
+}
 
 func (b Board) BoardPlaces() []Place {
 	size := b.Size()
@@ -158,46 +199,96 @@ func (b Board) String() string {
 // Common functions
 
 // Корректный ход в игре. Ячейка не может быть перезаписана
-func Step(b Board, fig Figure, p Place) Maybe[Board] {
+func Step(b Board, fig Figure, p Place) maybe.Maybe[Board] {
 	if DEBUG {
 		Duration(Track("Step"))
 	}
 	newG := NewBoard(uint(b.Size()))
 	CopyBoard(newG, b)
 	if !slices.Contains(b.BoardPlaces(), p) {
-		return fmt.Errorf("Некорректный ход: адрес ячейки задан неверно")
+		return maybe.Nothing[Board]() //fmt.Errorf("Некорректный ход: адрес ячейки задан неверно")
 	}
 	if cell, err := b.Get(p); err != nil {
 		panic(err)
 	} else if cell.IsEmpty() {
-		return fmt.Errorf("Некорректный ход: ячейка %v занята", p)
+		return maybe.Nothing[Board]() //fmt.Errorf("Некорректный ход: ячейка %v занята", p)
 	}
 	if err := newG.Set(p, fig); err != nil {
-		return err
+		return maybe.Nothing[Board]()
 	}
-	return newG
+	return maybe.Just(newG)
 }
 
-func Steps(b Board, fig Figure) []Maybe[Board] {
+func Steps(b Board, fig Figure) []maybe.Maybe[Board] {
 	if DEBUG {
 		Duration(Track("Steps"))
 	}
-	return Map(func(p Place) Maybe[Board] { b := Step(b, fig, p); return b }, b.BoardPlaces())
+	return Map(func(p Place) maybe.Maybe[Board] { b := Step(b, fig, p); return b }, b.BoardPlaces())
 }
 
 // Main
 func main() {
-	G := NewBoard(3)
-	fmt.Println(G)
-	if err := G.Set(Place{1, 1}, X); err != nil {
+	G1 := NewBoard(3)
+	if err := G1.Set(Place{0, 0}, X); err != nil {
 		panic(err)
 	}
-	if err := G.Set(Place{1, 2}, O); err != nil {
+	if err := G1.Set(Place{1, 0}, X); err != nil {
 		panic(err)
 	}
-	fmt.Println(G)
-	G = TransposeOpt(G)
-	fmt.Println(G)
+	if err := G1.Set(Place{2, 0}, X); err != nil {
+		panic(err)
+	}
+	G1r := Board(TransposeOpt(G1))
+	G2 := NewBoard(3)
+	if err := G2.Set(Place{0, 1}, X); err != nil {
+		panic(err)
+	}
+	if err := G2.Set(Place{1, 1}, X); err != nil {
+		panic(err)
+	}
+	if err := G2.Set(Place{2, 1}, X); err != nil {
+		panic(err)
+	}
+	G2r := Board(TransposeOpt(G2))
+	G3 := NewBoard(3)
+	if err := G3.Set(Place{0, 2}, O); err != nil {
+		panic(err)
+	}
+	if err := G3.Set(Place{1, 2}, O); err != nil {
+		panic(err)
+	}
+	if err := G3.Set(Place{2, 2}, O); err != nil {
+		panic(err)
+	}
+	G3r := Board(TransposeOpt(G3))
+	G4 := NewBoard(3)
+	if err := G4.Set(Place{0, 0}, O); err != nil {
+		panic(err)
+	}
+	if err := G4.Set(Place{1, 1}, O); err != nil {
+		panic(err)
+	}
+	if err := G4.Set(Place{2, 2}, O); err != nil {
+		panic(err)
+	}
+	G5 := NewBoard(3)
+	if err := G5.Set(Place{0, 2}, O); err != nil {
+		panic(err)
+	}
+	if err := G5.Set(Place{1, 1}, O); err != nil {
+		panic(err)
+	}
+	if err := G5.Set(Place{2, 0}, O); err != nil {
+		panic(err)
+	}
+	Winner(G1)
+	Winner(G1r)
+	Winner(G2)
+	Winner(G2r)
+	Winner(G3)
+	Winner(G3r)
+	Winner(G4)
+	Winner(G5)
 
 	//for _, b := range Steps(G, X) {
 	//	fmt.Println(b)
