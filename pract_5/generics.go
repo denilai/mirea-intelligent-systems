@@ -55,8 +55,20 @@ func Filter[T any](f func(T) bool, data []T) []T {
 }
 
 func All[T any](f func(T) bool, xs []T) bool {
-	return Reduce(func(a bool, b T) bool { return a && f(b) }, xs, true)
+	for i := range xs {
+		if !f(xs[i]) {
+			return false
+		}
+	}
+	return true
+	//return Reduce(func(a bool, b T) bool { return a && f(b) }, xs, true)
 }
 func Any[T any](f func(T) bool, xs []T) bool {
-	return Reduce(func(a bool, b T) bool { return a || f(b) }, xs, true)
+	for i := range xs {
+		if f(xs[i]) {
+			return true
+		}
+	}
+	return false
+	//return Reduce(func(a bool, b T) bool { return a || f(b) }, xs, true)
 }
