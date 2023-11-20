@@ -184,15 +184,14 @@ func NewBoard(size uint) Board {
 
 func (b Board) String() string {
 	rs := fmt.Sprintf("Board [%vx%v]", b.Size(), b.Size())
-	rs += "\n"
+	//rs += "\n|"
 	//hDelim := Reduce(func(s string, _ []Cell) string { return s + "--" }, b.Board, "")
 	for _, row := range b {
+		rs += "\n|"
 		for _, cell := range row {
-			rs += fmt.Sprintf("|%v", cell)
+			rs += fmt.Sprintf("%v|", cell)
 		}
-		rs += "|\n"
 	}
-	rs += "\n"
 	return rs
 }
 
