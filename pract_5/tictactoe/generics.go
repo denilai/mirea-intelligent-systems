@@ -11,7 +11,7 @@ func NewMatrix[T any](row, col uint) [][]T {
 	return m
 }
 
-func TransposeOpt[T any](a [][]T) [][]T {
+func Transpose[T any](a [][]T) [][]T {
 	b := NewMatrix[T](uint(len(a[0])), uint(len(a)))
 	for i := 0; i < len(b); i++ {
 		c := b[i]
