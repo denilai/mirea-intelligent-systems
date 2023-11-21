@@ -22,8 +22,44 @@ func perform[A any, B comparable](msg string, x Test[A, B], t *testing.T) {
 	}
 }
 
+func TestCopyBoard(t *testing.T) {
+	G1 := NewBoard(3)
+	copyG1 := NewBoard(3)
+	if err := copyG1.Set(Place{Row: 1, Col: 1}, X); err != nil {
+		panic(err)
+	}
+	if cell, err := G1.Get(Place{Row: 1, Col: 1}); err != nil {
+		panic(err)
+	} else if !cell.IsEmpty() {
+		t.Fatalf("Ошибка копирования. Скопированы ссылки на ячейки, а не значения")
+	}
+}
+
+func TestNoWinner(t *testing.T) {
+	G1 := NewBoard(3)
+	games := make([]Test[Board, maybe.Maybe[Figure]], 0, 3)
+	games = append(games, Test[Board, maybe.Maybe[Figure]]{Arg: G1, Func: Winner, Want: maybe.Nothing[Figure]()})
+	for i, game := range games {
+		perform(fmt.Sprintf("(%v) Oшибка поиска победителя (отсутствие победителя)", i), game, t)
+	}
+
+}
+
+func TestWinner(t *testing.T) {
+	G1 := Board{{X, Empty{}, O}, {O, O, O}, {X, Empty{}, O}}
+	G2 := Board{{X, Empty{}, O}, {X, O, O}, {X, O, Empty{}}}
+	G3 := Board{{Empty{}, O, O}, {X, O, X}, {O, X, Empty{}}}
+	games := make([]Test[Board, maybe.Maybe[Figure]], 0, 3)
+	games = append(games, Test[Board, maybe.Maybe[Figure]]{Arg: G1, Func: Winner, Want: maybe.Just(O)})
+	games = append(games, Test[Board, maybe.Maybe[Figure]]{Arg: G2, Func: Winner, Want: maybe.Just(X)})
+	games = append(games, Test[Board, maybe.Maybe[Figure]]{Arg: G3, Func: Winner, Want: maybe.Just(O)})
+	for i, game := range games {
+		perform(fmt.Sprintf("(%v) Oшибка поиска победителя", i), game, t)
+	}
+}
+
 func TestNoMainDiagWinner(t *testing.T) {
-	games := make([]Test[Board, maybe.Maybe[Figure]], 0)
+	games := make([]Test[Board, maybe.Maybe[Figure]], 0, 3)
 	// Есть победитель по строке и по вторичной диагонали, но не по главной диагонали
 	G1 := Board{{X, Empty{}, O}, {O, O, O}, {X, Empty{}, O}}
 	// Есть победитель по столбцу и по строке, но не по главной диагонали
@@ -39,7 +75,7 @@ func TestNoMainDiagWinner(t *testing.T) {
 }
 
 func TestDiagMainWinner(t *testing.T) {
-	games := make([]Test[Board, maybe.Maybe[Figure]], 0)
+	games := make([]Test[Board, maybe.Maybe[Figure]], 0, 2)
 	G1 := Board{{O, X, Empty{}}, {O, O, X}, {O, Empty{}, O}}
 	G2 := Board{{X, O, Empty{}}, {O, X, X}, {O, Empty{}, X}}
 	games = append(games, Test[Board, maybe.Maybe[Figure]]{Arg: G1, Func: MainDiagWinner, Want: maybe.Just(O)})
@@ -50,7 +86,7 @@ func TestDiagMainWinner(t *testing.T) {
 }
 
 func TestNoColWinner(t *testing.T) {
-	games := make([]Test[Board, maybe.Maybe[Figure]], 0)
+	games := make([]Test[Board, maybe.Maybe[Figure]], 0, 3)
 	// Есть победитель по строке, но не по столбцу
 	G1 := Board{{O, O, O}, {Empty{}, O, X}, {X, Empty{}, Empty{}}}
 	// Есть победитель по диагонали и по строке, но не по столбцу
@@ -66,7 +102,7 @@ func TestNoColWinner(t *testing.T) {
 }
 
 func TestColWinner(t *testing.T) {
-	games := make([]Test[Board, maybe.Maybe[Figure]], 0)
+	games := make([]Test[Board, maybe.Maybe[Figure]], 0, 3)
 	G1 := Board{{O, X, Empty{}}, {O, O, X}, {O, Empty{}, Empty{}}}
 	G2 := Board{{X, O, O}, {O, O, O}, {X, O, X}}
 	G3 := Board{{O, Empty{}, X}, {X, O, X}, {X, X, X}}
@@ -79,7 +115,7 @@ func TestColWinner(t *testing.T) {
 }
 
 func TestNoRowWinner(t *testing.T) {
-	games := make([]Test[Board, maybe.Maybe[Figure]], 0)
+	games := make([]Test[Board, maybe.Maybe[Figure]], 0, 3)
 	// Есть победитель по диагонали
 	G1 := Board{{O, Empty{}, O}, {Empty{}, O, X}, {X, Empty{}, O}}
 	// Есть победитель по столбцу, но не по строке
