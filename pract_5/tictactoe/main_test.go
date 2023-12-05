@@ -35,6 +35,29 @@ func TestCopyBoard(t *testing.T) {
 	}
 }
 
+func TestNextMove(t *testing.T) {
+	G1 := NewBoard(3)
+	G2 := NewBoard(3)
+	G3 := NewBoard(3)
+	G2.Set(Place{1, 2}, X)
+	G2.Set(Place{0, 0}, O)
+	G3.Set(Place{0, 0}, X)
+	G3.Set(Place{1, 0}, O)
+	G3.Set(Place{2, 0}, X)
+	//G1.Set(Place{1, 1}, X))
+	//G1.Set(Place{1, 0}, O})
+	games := make([]Board, 0, 3)
+	wants := make([]Figure, 0, 3)
+	games = append(games, G1, G2, G3)
+	wants = append(wants, X, X, O)
+	for i := range games {
+		next := games[i].NextMove()
+		if next != wants[i] {
+			t.Fatalf("%v\nОшибка определения следующего хода\n  Ожидалось: %v\n  Получено: %v\n", games[i], wants[i], next)
+		}
+	}
+}
+
 func TestNoWinner(t *testing.T) {
 	G1 := NewBoard(3)
 	games := make([]Test[Board, maybe.Maybe[Figure]], 0, 3)
