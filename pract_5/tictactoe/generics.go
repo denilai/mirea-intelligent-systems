@@ -31,7 +31,7 @@ func Reduce[T, M any](f func(M, T) M, s []T, initValue M) M {
 }
 
 func Map[T any, M any](f func(T) M, data []T) []M {
-	if DEBUG {
+	if ll == DEBUG {
 		defer Duration(Track("Map"))
 	}
 	n := make([]M, len(data))
@@ -42,7 +42,7 @@ func Map[T any, M any](f func(T) M, data []T) []M {
 }
 
 func Filter[T any](f func(T) bool, data []T) []T {
-	if DEBUG {
+	if ll == DEBUG {
 		defer Duration(Track("Filter"))
 	}
 	fltd := make([]T, 0, len(data))
