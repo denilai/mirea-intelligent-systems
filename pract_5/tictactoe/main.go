@@ -235,7 +235,7 @@ func Winner(b Board) maybe.Maybe[Figure] {
 }
 
 // Функция возвращает все свободные (незанятые фигурами) места на поля для игры в Крестики-нолики
-func (b Board) FreePlaces() []Place {
+func (b Board) EmptyPlaces() []Place {
 	size := b.Size()
 	ps := make([]Place, 0, size*size)
 	for i := range ps {
@@ -466,21 +466,49 @@ func showMap(sm map[string]float64) {
 	}
 }
 
+type Agent struct {
+	qmap   map[string]float64
+	figure Figure
+}
+
+func (a Agent) Lookup(b Board) float64 {
+	code, err := Encode(b)
+	if err != nil {
+		panic(err)
+	}
+	value, ok := a.qmap[code]
+	if !ok {
+		panic(fmt.Errorf("%v\nКомбинация не найдена в матрице ценностей", b))
+	}
+	return value
+}
+
+func (a Agent) MakeMove(b Board) Board {
+	value := a.Lookup(b)
+	emptyCells := b.EmptyPlaces()
+	_, _ = value, emptyCells
+	candidates := Map(func(mb maybe.Maybe[Board]) Board { return mb.FromJust() }, Filter(func(mb maybe.Maybe[Board]) bool { return mb.HasValue() }, Map(func(p Place) maybe.Maybe[Board] { return Step(b, a.figure, p) }, emptyCells)))
+	values := Map(a.Lookup, candidates)
+	maxV := slices.Max(values)
+	for i, v := range values {
+		if v == maxV {
+			return candidates[i]
+		}
+	}
+	return b
+}
+
+func Match() {
+	board := NewBoard(3)
+	agent := X
+	opponent := O
+
+}
+
 // Main
 func main() {
-	////ds := [][]int{[]int{1, 2, 3}, []int{1, 3, 4}}
-	////ds := [][]int{[]int{1, 2, 3}, []int{1, 3, 4}}
-	//ds := Board{{X, Empty{}, Empty{}}, {O, O, X}, {Empty{}, Empty{}, Empty{}}}
-	////enc := toBytes(ds)
-	//enc, err := Encode(ds)
-	//fmt.Println(enc, err)
-	//dec, err := FromGOB64(enc)
-	//fmt.Println(dec, err)
-	//os.Exit(1)
 	G1 := NewBoard(3)
-	//G1 := Board{{Empty{}, Empty{}, Empty{}}, {Empty{}, Empty{}, Empty{}}, {Empty{}, Empty{}, Empty{}}}
 	bs := RecSteps2(make(map[string]float64, int(math.Pow(3, 9))), []Board{G1})
-	//fbs := Filter(func(mb maybe.Maybe[Board]) bool { return mb.HasValue() }, bs)
 
 	fmt.Println(len(bs))
 	analyzeScoreMap(bs)
