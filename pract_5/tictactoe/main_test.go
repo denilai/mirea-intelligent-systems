@@ -22,6 +22,25 @@ func perform[A any, B comparable](msg string, x Test[A, B], t *testing.T) {
 	}
 }
 
+func TestEncode2(t *testing.T) {
+	G1 := NewBoard(3)
+	G1.Set(Place{0, 0}, X)
+	G1.Set(Place{0, 1}, O)
+	G1.Set(Place{0, 2}, X)
+	G1.Set(Place{1, 0}, O)
+	want := "XOXO     "
+	if res, _ := Encode2(G1); want != res {
+		t.Fatalf("Ожидался `%v`, получен `%v`", want, res)
+	}
+}
+func TestEncode2Empty(t *testing.T) {
+	G1 := NewBoard(3)
+	want := "         "
+	if res, _ := Encode2(G1); want != res {
+		t.Fatalf("Ожидался `%v`, получен `%v`", want, res)
+	}
+}
+
 func TestCopyBoard(t *testing.T) {
 	G1 := NewBoard(3)
 	copyG1 := NewBoard(3)

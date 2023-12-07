@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"slices"
 
 	"github.com/denilai/maybe"
@@ -21,7 +22,7 @@ const (
 )
 const Gamer Figure = X
 
-var ll = INFO
+var ll = ERROR
 
 type Figure byte
 
@@ -236,15 +237,23 @@ func Winner(b Board) maybe.Maybe[Figure] {
 
 // Функция возвращает все свободные (незанятые фигурами) места на поля для игры в Крестики-нолики
 func (b Board) EmptyPlaces() []Place {
-	size := b.Size()
-	ps := make([]Place, 0, size*size)
-	for i := range ps {
-		p := Place{Row: uint(i / size), Col: uint(i % size)}
-		if cell, err := b.Get(p); err == nil && !cell.IsEmpty() {
-			ps = append(ps, Place{Row: uint(i / size), Col: uint(i % size)})
+	places := b.Places()
+	return Filter(func(p Place) bool {
+		if cell, err := b.Get(p); err == nil && cell.IsEmpty() {
+			return true
+		} else {
+			return false
 		}
-	}
-	return ps
+	}, places)
+	//size := b.Size()
+	//ps := make([]Place, 0, size*size)
+	//for i := range ps {
+	//	p := Place{Row: uint(i / size), Col: uint(i % size)}
+	//	if cell, err := b.Get(p); err == nil && cell.IsEmpty() {
+	//		ps = append(ps, Place{Row: uint(i / size), Col: uint(i % size)})
+	//	}
+	//}
+	//return ps
 }
 
 // Функция возвращает все места на поля для игры в Крестики-нолики
@@ -315,6 +324,15 @@ func (b Board) String() string {
 }
 
 // Common functions
+func Encode2(t Board) (string, error) {
+	cells := t.Flatten()
+	code := Reduce(func(acc string, c Cell) string { return acc + c.String() }, cells, "")
+	return code, nil
+}
+
+func Decode2(t Board) (Board, error) {
+
+}
 
 func Encode(t Board) (string, error) {
 	b := bytes.Buffer{}
@@ -485,32 +503,51 @@ func (a Agent) Lookup(b Board) float64 {
 
 func (a Agent) MakeMove(b Board) Board {
 	value := a.Lookup(b)
+	fmt.Println(b)
 	emptyCells := b.EmptyPlaces()
 	_, _ = value, emptyCells
-	candidates := Map(func(mb maybe.Maybe[Board]) Board { return mb.FromJust() }, Filter(func(mb maybe.Maybe[Board]) bool { return mb.HasValue() }, Map(func(p Place) maybe.Maybe[Board] { return Step(b, a.figure, p) }, emptyCells)))
-	values := Map(a.Lookup, candidates)
-	maxV := slices.Max(values)
-	for i, v := range values {
-		if v == maxV {
-			return candidates[i]
+	candidates := Map(func(p Place) maybe.Maybe[Board] { return Step(b, a.figure, p) }, emptyCells)
+	fmt.Println(len(candidates))
+	valueMap := make(map[string]float64, len(candidates))
+	values := make([]float64, 0, len(candidates))
+	for _, mc := range candidates {
+		if mc.HasValue() {
+			c := mc.FromJust()
+			code, err := Encode(c)
+			if err != nil {
+				panic(err)
+			}
+			valueMap[code] = a.Lookup(b)
+			values = append(values, a.Lookup(b))
 		}
 	}
-	return b
-}
-
-func Match() {
-	board := NewBoard(3)
-	agent := X
-	opponent := O
-
+	maxValue := slices.Max(values)
+	for k, v := range valueMap {
+		if v == maxValue {
+			move, err := Decode(k)
+			if err != nil {
+				panic(err)
+			}
+			return move
+		}
+	}
+	panic(fmt.Errorf("Подходящих ход не найден"))
 }
 
 // Main
 func main() {
 	G1 := NewBoard(3)
+	G2 := NewBoard(3)
+	//G2.Set(Place{1, 1}, X)
+	//G2.Set(Place{1, 2}, O)
 	bs := RecSteps2(make(map[string]float64, int(math.Pow(3, 9))), []Board{G1})
-
-	fmt.Println(len(bs))
 	analyzeScoreMap(bs)
+	os.Exit(1)
+	agent := Agent{qmap: bs, figure: X}
+	for {
+		G2 = agent.MakeMove(G2)
+		fmt.Println(G2)
+	}
+
 	//showMap(bs)
 }
