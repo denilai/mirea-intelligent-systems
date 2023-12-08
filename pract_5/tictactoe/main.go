@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/base64"
 	"encoding/gob"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"math"
 	"os"
 	"slices"
+	"sort"
 
 	"github.com/denilai/maybe"
 )
@@ -53,6 +55,17 @@ func (Empty) String() string { return " " }
 func (Empty) Int() int       { return 0 }
 
 // Figure methods
+
+func ParseFig(src string) (Figure, error) {
+	switch src {
+	case X.String():
+		return X, nil
+	case O.String():
+		return O, nil
+	default:
+		return X, fmt.Errorf("Невозможно распознать фигуру: %v", src)
+	}
+}
 
 func (fig Figure) Int() int {
 	switch fig {
@@ -324,17 +337,26 @@ func (b Board) String() string {
 }
 
 // Common functions
-func Encode2(t Board) (string, error) {
+func Encode(t Board) (string, error) {
 	cells := t.Flatten()
 	code := Reduce(func(acc string, c Cell) string { return acc + c.String() }, cells, "")
 	return code, nil
 }
 
-func Decode2(t Board) (Board, error) {
+func Decode(src string) (Board, error) {
+	board := make([]int, len([]rune(src)))
+	for _, r := range src {
+		if fig, err := ParseFig(string(r)); err != nil {
+			return Board{}, err
+		} else {
+			board = append(board, fig.Int())
+		}
+	}
+	return Initialize(board), nil
 
 }
 
-func Encode(t Board) (string, error) {
+func EncodeGOB(t Board) (string, error) {
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)
 	if err := e.Encode(Map(func(c Cell) int { return c.Int() }, t.Flatten())); err != nil {
@@ -343,7 +365,7 @@ func Encode(t Board) (string, error) {
 	return base64.StdEncoding.EncodeToString(b.Bytes()), nil
 }
 
-func Decode(src string) (Board, error) {
+func DecodeGOB(src string) (Board, error) {
 	obj := *new([]int)
 	if by, err := base64.StdEncoding.DecodeString(src); err != nil {
 		return *new(Board), fmt.Errorf("Failed base64 Decode: %v", err)
@@ -489,27 +511,57 @@ type Agent struct {
 	figure Figure
 }
 
-func (a Agent) Lookup(b Board) float64 {
+func (a Agent) Lookup(b Board) (float64, error) {
 	code, err := Encode(b)
 	if err != nil {
-		panic(err)
+		return -1, err
 	}
 	value, ok := a.qmap[code]
 	if !ok {
-		panic(fmt.Errorf("%v\nКомбинация не найдена в матрице ценностей", b))
+		return -1, fmt.Errorf("%v\nКомбинация не найдена в матрице ценностей", b)
 	}
-	return value
+	return value, nil
 }
 
-func (a Agent) MakeMove(b Board) Board {
-	value := a.Lookup(b)
-	fmt.Println(b)
-	emptyCells := b.EmptyPlaces()
-	_, _ = value, emptyCells
-	candidates := Map(func(p Place) maybe.Maybe[Board] { return Step(b, a.figure, p) }, emptyCells)
-	fmt.Println(len(candidates))
-	valueMap := make(map[string]float64, len(candidates))
-	values := make([]float64, 0, len(candidates))
+func MaybeMax[T cmp.Ordered](ma maybe.Maybe[T], mb maybe.Maybe[T]) maybe.Maybe[T] {
+	if ma.HasValue() && mb.HasValue() {
+		return maybe.Just[T](max(ma.FromJust(), mb.FromJust()))
+	} else {
+		return maybe.Nothing[T]()
+	}
+}
+
+func SortByValue(qmap Qmap, desc bool) PairList {
+	pl := make(PairList, len(qmap))
+	i := 0
+	for k, v := range qmap {
+		pl[i] = Pair{k, v}
+		i++
+	}
+	if desc {
+		sort.Sort(sort.Reverse(pl))
+	} else {
+		sort.Sort(pl)
+	}
+	return pl
+}
+
+type Qmap map[string]float64
+
+type Pair struct {
+	Key   string
+	Value float64
+}
+
+type PairList []Pair
+
+func (p PairList) Len() int           { return len(p) }
+func (p PairList) Less(i, j int) bool { return p[i].Value < p[j].Value }
+func (p PairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+func (a Agent) BestMove(b Board) (Board, error) {
+	candidates := Map(func(p Place) maybe.Maybe[Board] { return Step(b, a.figure, p) }, b.EmptyPlaces())
+	shortQmap := make(Qmap, len(candidates))
 	for _, mc := range candidates {
 		if mc.HasValue() {
 			c := mc.FromJust()
@@ -517,21 +569,22 @@ func (a Agent) MakeMove(b Board) Board {
 			if err != nil {
 				panic(err)
 			}
-			valueMap[code] = a.Lookup(b)
-			values = append(values, a.Lookup(b))
-		}
-	}
-	maxValue := slices.Max(values)
-	for k, v := range valueMap {
-		if v == maxValue {
-			move, err := Decode(k)
+			k, err := a.Lookup(b)
 			if err != nil {
-				panic(err)
+				return Board{}, err
 			}
-			return move
+			shortQmap[code] = k
 		}
 	}
-	panic(fmt.Errorf("Подходящих ход не найден"))
+	pl := SortByValue(shortQmap, true)
+	board, err := Decode(pl[1].Key)
+	if err != nil {
+		return Board{}, err
+	} else {
+		return board, nil
+	}
+	//return Board{}, fmt.Errorf("Подходящих ход не найден")
+
 }
 
 // Main
@@ -544,8 +597,9 @@ func main() {
 	analyzeScoreMap(bs)
 	os.Exit(1)
 	agent := Agent{qmap: bs, figure: X}
+	_ = agent
 	for {
-		G2 = agent.MakeMove(G2)
+		//G2 = agent.MakeMove(G2)
 		fmt.Println(G2)
 	}
 

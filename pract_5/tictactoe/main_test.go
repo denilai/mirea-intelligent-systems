@@ -8,35 +8,61 @@ import (
 )
 
 type Test[A, W any] struct {
-	Arg  A
-	Func func(A) W
-	Want W
+	Arg         A
+	Func        func(A) W
+	EFunc       func(A) (W, error)
+	ExpectError bool
+	Want        W
 }
 
 func perform[A any, B comparable](msg string, x Test[A, B], t *testing.T) {
 	want := x.Want
 	arg := x.Arg
-	res := x.Func(arg)
+	var res B
+	if x.Func != nil {
+		res = x.Func(arg)
+	} else {
+		res, _ = x.EFunc(arg)
+	}
 	if want != res {
 		t.Fatalf("%v\n%v. Ожидался `%v`, получен `%v`", arg, msg, want, res)
 	}
 }
 
-func TestEncode2(t *testing.T) {
+func TestDecode(t *testing.T) {
+	src1 := "X        "
+	src2 := "O X X O X"
+	src3 := "         "
+	want1 := Board{{X, Empty{}, Empty{}}, {Empty{}, Empty{}, Empty{}}, {Empty{}, Empty{}, Empty{}}}
+	want2 := Board{{O, Empty{}, X}, {Empty{}, X, Empty{}}, {O, Empty{}, X}}
+	want3 := Board{{Empty{}, Empty{}, Empty{}}, {Empty{}, Empty{}, Empty{}}, {Empty{}, Empty{}, Empty{}}}
+	srcs := []string{src1, src2, src3}
+	wants := []Board{want1, want2, want3}
+	tests := make([]Test[string, Board], len(srcs))
+	for i := 0; i < len(srcs); i++ {
+		tests = append(tests, Test[string, Board]{Want: wants[i], Arg: srcs[i], EFunc: Decode})
+	}
+	for _, test := range tests {
+		perform("Ошибка декодирования поля", test, t)
+	}
+
+}
+
+func TestEncode(t *testing.T) {
 	G1 := NewBoard(3)
 	G1.Set(Place{0, 0}, X)
 	G1.Set(Place{0, 1}, O)
 	G1.Set(Place{0, 2}, X)
 	G1.Set(Place{1, 0}, O)
 	want := "XOXO     "
-	if res, _ := Encode2(G1); want != res {
+	if res, _ := Encode(G1); want != res {
 		t.Fatalf("Ожидался `%v`, получен `%v`", want, res)
 	}
 }
-func TestEncode2Empty(t *testing.T) {
+func TestEncodeEmpty(t *testing.T) {
 	G1 := NewBoard(3)
 	want := "         "
-	if res, _ := Encode2(G1); want != res {
+	if res, _ := Encode(G1); want != res {
 		t.Fatalf("Ожидался `%v`, получен `%v`", want, res)
 	}
 }
