@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"slices"
 	"sort"
 
@@ -24,7 +23,7 @@ const (
 )
 const Gamer Figure = X
 
-var ll = ERROR
+var ll = INFO
 
 type Figure byte
 
@@ -56,14 +55,16 @@ func (Empty) Int() int       { return 0 }
 
 // Figure methods
 
-func ParseFig(src string) (Figure, error) {
+func ParseCell(src string) (Cell, error) {
 	switch src {
 	case X.String():
 		return X, nil
 	case O.String():
 		return O, nil
+	case Empty{}.String():
+		return Empty{}, nil
 	default:
-		return X, fmt.Errorf("Невозможно распознать фигуру: %v", src)
+		return X, fmt.Errorf("Невозможно распознать фигуру: `%v`", src)
 	}
 }
 
@@ -345,11 +346,11 @@ func Encode(t Board) (string, error) {
 
 func Decode(src string) (Board, error) {
 	board := make([]int, len([]rune(src)))
-	for _, r := range src {
-		if fig, err := ParseFig(string(r)); err != nil {
+	for i, r := range src {
+		if cell, err := ParseCell(string(r)); err != nil {
 			return Board{}, err
 		} else {
-			board = append(board, fig.Int())
+			board[i] = cell.Int()
 		}
 	}
 	return Initialize(board), nil
@@ -532,6 +533,9 @@ func MaybeMax[T cmp.Ordered](ma maybe.Maybe[T], mb maybe.Maybe[T]) maybe.Maybe[T
 }
 
 func SortByValue(qmap Qmap, desc bool) PairList {
+	if ll == DEBUG {
+		Duration(Track("SortByValue"))
+	}
 	pl := make(PairList, len(qmap))
 	i := 0
 	for k, v := range qmap {
@@ -560,14 +564,23 @@ func (p PairList) Less(i, j int) bool { return p[i].Value < p[j].Value }
 func (p PairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func (a Agent) BestMove(b Board) (Board, error) {
+	if ll == DEBUG {
+		Duration(Track("BestMove"))
+	}
 	candidates := Map(func(p Place) maybe.Maybe[Board] { return Step(b, a.figure, p) }, b.EmptyPlaces())
+	if ll == INFO {
+		log.Printf("Количество кандидатов (включая Nothing): %v", len(candidates))
+	}
+	if len(candidates) == 0 {
+		return Board{}, fmt.Errorf("Нет вариантов ходов")
+	}
 	shortQmap := make(Qmap, len(candidates))
 	for _, mc := range candidates {
 		if mc.HasValue() {
 			c := mc.FromJust()
 			code, err := Encode(c)
 			if err != nil {
-				panic(err)
+				return Board{}, err
 			}
 			k, err := a.Lookup(b)
 			if err != nil {
@@ -577,14 +590,17 @@ func (a Agent) BestMove(b Board) (Board, error) {
 		}
 	}
 	pl := SortByValue(shortQmap, true)
-	board, err := Decode(pl[1].Key)
+	bestMove, err := Decode(pl[0].Key)
+	if ll == INFO {
+		log.Println("Доска на вход:")
+		log.Println(b)
+		log.Println("Лучший ход:\n%v", bestMove)
+	}
 	if err != nil {
 		return Board{}, err
 	} else {
-		return board, nil
+		return bestMove, nil
 	}
-	//return Board{}, fmt.Errorf("Подходящих ход не найден")
-
 }
 
 // Main
@@ -595,13 +611,12 @@ func main() {
 	//G2.Set(Place{1, 2}, O)
 	bs := RecSteps2(make(map[string]float64, int(math.Pow(3, 9))), []Board{G1})
 	analyzeScoreMap(bs)
-	os.Exit(1)
 	agent := Agent{qmap: bs, figure: X}
-	_ = agent
-	for {
-		//G2 = agent.MakeMove(G2)
-		fmt.Println(G2)
+	bestMove, err := agent.BestMove(G2)
+	if err != nil {
+		panic(err)
 	}
+	fmt.Println(bestMove)
 
 	//showMap(bs)
 }

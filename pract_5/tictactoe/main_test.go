@@ -29,6 +29,26 @@ func perform[A any, B comparable](msg string, x Test[A, B], t *testing.T) {
 	}
 }
 
+func TestDecode2(t *testing.T) {
+	src := "O X X O X"
+	want := Board{{O, Empty{}, X}, {Empty{}, X, Empty{}}, {O, Empty{}, X}}
+	if b, err := Decode(src); err != nil {
+		t.Fatal(err)
+	} else if b.String() != want.String() {
+		t.Fatalf("Ошибка декодирования поля")
+	}
+}
+
+func TestEmptyDecode(t *testing.T) {
+	src := "         "
+	want := Board{{Empty{}, Empty{}, Empty{}}, {Empty{}, Empty{}, Empty{}}, {Empty{}, Empty{}, Empty{}}}
+	if b, err := Decode(src); err != nil {
+		t.Fatalf("Error")
+	} else if b.String() != want.String() {
+		t.Fatalf("Ошибка декодирования поля")
+	}
+}
+
 func TestDecode(t *testing.T) {
 	src1 := "X        "
 	src2 := "O X X O X"
@@ -40,12 +60,18 @@ func TestDecode(t *testing.T) {
 	wants := []Board{want1, want2, want3}
 	tests := make([]Test[string, Board], len(srcs))
 	for i := 0; i < len(srcs); i++ {
-		tests = append(tests, Test[string, Board]{Want: wants[i], Arg: srcs[i], EFunc: Decode})
+		tests[i] = Test[string, Board]{Want: wants[i], Arg: srcs[i], EFunc: Decode}
 	}
 	for _, test := range tests {
-		perform("Ошибка декодирования поля", test, t)
+		if b, err := Decode(test.Arg); err != nil {
+			t.Fatal(err)
+		} else {
+			fmt.Println(b)
+			if b.String() != test.Want.String() {
+				t.Fatalf("Ошибка декодирования поля")
+			}
+		}
 	}
-
 }
 
 func TestEncode(t *testing.T) {
