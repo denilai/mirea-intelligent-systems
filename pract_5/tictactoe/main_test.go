@@ -29,6 +29,22 @@ func perform[A any, B comparable](msg string, x Test[A, B], t *testing.T) {
 	}
 }
 
+func TestHeuristicStep(t *testing.T) {
+	src := "X XO OX  "
+	b, err := Decode(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hs, err := HeuristicStep(b, O)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Place{1, 1}
+	if hs != want {
+		t.Fatalf("Ошибочный ход %v. Есть победный ход {1,1}", hs)
+	}
+}
+
 func TestDecode2(t *testing.T) {
 	src := "O X X O X"
 	want := Board{{O, Empty{}, X}, {Empty{}, X, Empty{}}, {O, Empty{}, X}}
@@ -66,7 +82,6 @@ func TestDecode(t *testing.T) {
 		if b, err := Decode(test.Arg); err != nil {
 			t.Fatal(err)
 		} else {
-			fmt.Println(b)
 			if b.String() != test.Want.String() {
 				t.Fatalf("Ошибка декодирования поля")
 			}
