@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"slices"
 	"sort"
+	"time"
 
 	"github.com/denilai/maybe"
 )
@@ -256,6 +258,10 @@ func Winner(b Board) maybe.Maybe[Figure] {
 	return maybe.Nothing[Figure]()
 }
 
+func IsTie(b Board) bool {
+	return !Winner(b).HasValue() && len(b.EmptyPlaces()) == 0
+}
+
 // Функция возвращает все свободные (незанятые фигурами) места на поля для игры в Крестики-нолики
 func (b Board) EmptyPlaces() []Place {
 	places := b.Places()
@@ -399,13 +405,13 @@ func Step(b Board, p Place, fig Figure) maybe.Maybe[Board] {
 	}
 	if Winner(b).HasValue() {
 		if ll == INFO {
-			fmt.Println("Партия окончена")
+			log.Println("Партия окончена")
 		}
 		return maybe.Nothing[Board]()
 	}
 	if !slices.Contains(b.Places(), p) {
 		if ll == INFO {
-			fmt.Println("Некорректный ход: адрес ячейки задан неверно")
+			log.Println("Некорректный ход: адрес ячейки задан неверно")
 		}
 		return maybe.Nothing[Board]()
 	}
@@ -517,8 +523,10 @@ func showMap(sm map[string]float64) {
 }
 
 type Agent struct {
-	qmap   map[string]float64
-	figure Figure
+	alpha   float64
+	qmap    map[string]float64
+	History []string
+	Figure  Figure
 }
 
 func (a Agent) Lookup(b Board) (float64, error) {
@@ -528,7 +536,7 @@ func (a Agent) Lookup(b Board) (float64, error) {
 	}
 	value, ok := a.qmap[code]
 	if !ok {
-		return -1, fmt.Errorf("%v\nКомбинация не найдена в матрице ценностей", b)
+		return -1, fmt.Errorf("%v\nКомбинация с хешем `%v` не найдена в матрице ценностей", b, code)
 	}
 	return value, nil
 }
@@ -572,17 +580,18 @@ func (p PairList) Len() int           { return len(p) }
 func (p PairList) Less(i, j int) bool { return p[i].Value < p[j].Value }
 func (p PairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-func (a Agent) BestMove(b Board) (Board, error) {
+func (a *Agent) BestMove(b Board, epsilon float64) (Board, error) {
 	if ll == DEBUG {
 		Duration(Track("BestMove"))
 	}
-	candidates := Map(func(p Place) maybe.Maybe[Board] { return Step(b, p, a.figure) }, b.EmptyPlaces())
+	var stepHash string
+	candidates := Map(func(p Place) maybe.Maybe[Board] { return Step(b, p, a.Figure) }, b.EmptyPlaces())
 	filtCanidates := Filter(func(mb maybe.Maybe[Board]) bool { return mb.HasValue() }, candidates)
 	if ll == INFO {
 		log.Printf("Количество кандидатов (включая Nothing): %v", len(candidates))
 	}
 	if len(filtCanidates) == 0 {
-		return Board{}, fmt.Errorf("Нет вариантов ходов")
+		return Board{}, fmt.Errorf("%v\nНет вариантов ходов", b)
 	}
 	shortQmap := make(Qmap, len(filtCanidates))
 	for _, mc := range candidates {
@@ -600,55 +609,157 @@ func (a Agent) BestMove(b Board) (Board, error) {
 		}
 	}
 	pl := SortByValue(shortQmap, true)
-	bestMove, err := Decode(pl[0].Key)
-	if ll == DEBUG {
-		log.Println("Доска на вход:")
-		log.Println(b)
-		log.Printf("Лучший ход:\n%v", bestMove)
+	rand.Seed(time.Now().UnixNano())
+	r := rand.Float64()
+	if r <= epsilon {
+		stepHash = pl[rand.Intn(len(pl))].Key
+	} else {
+		stepHash = pl[0].Key
+		if ll == INFO {
+			log.Println("Случайный ход")
+		}
 	}
+	bestMove, err := Decode(stepHash)
 	if err != nil {
 		return Board{}, err
 	} else {
+		if ll == DEBUG {
+			log.Println("Доска на вход:")
+			log.Println(b)
+			log.Printf("Лучший ход:\n%v", bestMove)
+		}
+		a.History = append(a.History, pl[0].Key)
 		return bestMove, nil
 	}
+}
+
+func (a *Agent) Fit() error {
+	if ll == DEBUG {
+		Duration(Track("Fit"))
+	}
+	if ll == DEBUG {
+		boards := Map(func(hash string) maybe.Maybe[Board] {
+			if board, err := Decode(hash); err != nil {
+				return maybe.Nothing[Board]()
+			} else {
+				return maybe.Just[Board](board)
+			}
+		}, a.History)
+		for i := range boards {
+			log.Println(boards[i])
+		}
+	}
+	for i := len(a.History) - 1; i >= 1; i-- {
+		prev, next := a.History[i-1], a.History[i]
+		prevValue, ok1 := a.qmap[prev]
+		nextValue, ok2 := a.qmap[next]
+		if !ok1 {
+			return fmt.Errorf("Элемент %v не найден в q-таблице", prev)
+		} else if !ok2 {
+			return fmt.Errorf("Элемент %v не найден в q-таблице", next)
+		}
+		a.qmap[prev] = prevValue + a.alpha*(nextValue-prevValue)
+		if ll == INFO {
+			board, err := Decode(prev)
+			if err != nil {
+				panic(err)
+			}
+			log.Println(board)
+			log.Printf("NextValue: %v Key: %v Value: %v -> %v", nextValue, prev, prevValue, a.qmap[prev])
+		}
+		a.History = a.History[:i]
+	}
+	return nil
 }
 
 // Main
 func main() {
 	ll = ERROR
-	G := NewBoard(3)
 	var err error
+	G := NewBoard(3)
 	//G.Set(Place{1, 1}, X)
 	//G.Set(Place{1, 2}, O)
 	bs := RecSteps2(make(map[string]float64, int(math.Pow(3, 9))), []Board{G})
-	analyzeScoreMap(bs)
-	agent := Agent{qmap: bs, figure: X}
-	opFig := O
-	for i := 0; ; i++ {
-		if G, err = agent.BestMove(G); err != nil {
+	for key, value := range bs {
+		if board, err := Decode(key); err != nil {
 			panic(err)
-		}
-		fmt.Printf("%v-й ход", i)
-		fmt.Println(G)
-		if winner := Winner(G); winner.HasValue() {
-			fmt.Printf("Игра закончена. Победитель -- %v\n", winner.FromJust())
-			break
-		}
-		opPlace, err := HeuristicStep(G, opFig)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("Соперник `%v` сходил на %v\n", opFig, opPlace)
-		if mBoard := Step(G, opPlace, opFig); mBoard.HasValue() {
-			G = mBoard.FromJust()
 		} else {
-			panic(fmt.Errorf("Невозможный ход"))
-		}
-		fmt.Println(G)
-		if winner := Winner(G); winner.HasValue() {
-			fmt.Printf("Игра закончена. Победитель -- %v\n", winner.FromJust())
-			break
+			log.Println(board, value)
 		}
 	}
+	////os.Exit(1)
+	analyzeScoreMap(bs)
+	agent := Agent{alpha: 1, qmap: bs, Figure: X}
+	opFig := O
+	var winRatio []float64
+	var wins, losses, tie int
+	for k := 1; k <= 100000; k++ {
+		G := NewBoard(3)
+		fmt.Printf("Партия № %v\n", k)
+		winRatio = append(winRatio, float64(wins)/float64(k))
+		routine := func() {
+			for i := 1; ; i++ {
+				if winner := Winner(G); winner.HasValue() {
+					log.Printf("Игра закончена. Победитель -- %v\n", winner.FromJust())
+					if winner.FromJust() == agent.Figure {
+						wins++
+					} else {
+						losses++
+					}
+					agent.Fit()
+					return
+				}
+				if IsTie(G) {
+					fmt.Printf("Hичья")
+					tie++
+					agent.Fit()
+					return
+				}
+				if G, err = agent.BestMove(G, 0.05); err != nil {
+					panic(err)
+				}
+				if ll == DEBUG {
+					log.Printf("%v-й ход", i)
+					log.Println(G)
+				}
+				if winner := Winner(G); winner.HasValue() {
+					log.Printf("Игра закончена. Победитель -- %v\n", winner.FromJust())
+					if winner.FromJust() == agent.Figure {
+						wins++
+					} else {
+						losses++
+					}
+					agent.Fit()
+					return
+				}
+				if IsTie(G) {
+					log.Printf("Hичья")
+					tie++
+					agent.Fit()
+					return
+				}
+				opPlace, err := HeuristicStep(G, opFig)
+				if err != nil {
+					panic(err)
+				}
+				if ll == DEBUG {
+					log.Printf("Соперник `%v` сходил на %v\n", opFig, opPlace)
+				}
+				if mBoard := Step(G, opPlace, opFig); mBoard.HasValue() {
+					G = mBoard.FromJust()
+					hash, err := Encode(G)
+					if err != nil {
+						panic(err)
+					}
+					agent.History = append(agent.History, hash)
+				} else {
+					panic(fmt.Errorf("Невозможный ход"))
+				}
+			}
+		}
+		routine()
+	}
+	fmt.Printf("Побед: %v\nПроигрышей: %v\nНичьих: %v", wins, losses, tie)
+	fmt.Println(winRatio)
 	//showMap(bs)
 }
