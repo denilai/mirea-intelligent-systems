@@ -1,10 +1,11 @@
 pipeline {
     agent {label "linux"}
     stages {
-        stage('Hello')
+        stage('Hello') {
             steps {
                 echo 'hello'
                 sh 'go build ./maybe'
             }
+        }
     }
 }
